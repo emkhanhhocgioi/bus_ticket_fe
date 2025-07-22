@@ -1,0 +1,394 @@
+"use client"
+
+import { useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import NavigationBar from "@/components/navigation/navigationbar"
+import { 
+  Search, 
+  ArrowLeftRight, 
+  Calendar, 
+  Plus, 
+  CheckCircle, 
+  Headphones, 
+  Gift,
+  CreditCard,
+  Star,
+  MapPin,
+  Clock,
+  Shield,
+  Phone,
+  Users,
+  Car,
+  Plane,
+  Train
+} from "lucide-react"
+
+import { useRouter } from "next/navigation"
+
+export default function HomePage() {
+  const [activeTab, setActiveTab] = useState("bus")
+  const [fromLocation, setFromLocation] = useState("")
+  const [toLocation, setToLocation] = useState("")
+  const [departureDate, setDepartureDate] = useState("")
+  const [returnDate, setReturnDate] = useState("")
+  const [showReturnDate, setShowReturnDate] = useState(false)
+
+  const popularRoutes = [
+    { from: "Sài Gòn", to: "Đà Lạt", price: "199.000đ", originalPrice: "400.000đ" },
+    { from: "Sài Gòn", to: "Nha Trang", price: "200.000đ" },
+    { from: "Sài Gòn", to: "Phan Thiết", price: "160.000đ", originalPrice: "180.000đ" },
+    { from: "Nha Trang", to: "Sài Gòn", price: "200.000đ" },
+  ]
+
+  const promotions = [
+    {
+      title: "Lương về chốt deal - Giảm đến 50%",
+      subtitle: "vào ngày 25 hàng tháng",
+      image: "/api/placeholder/300/200"
+    },
+    {
+      title: "Flash Sale đến 50%",
+      subtitle: "12h - 14h Thứ 3",
+      image: "/api/placeholder/300/200"
+    },
+    {
+      title: "Giảm đến 25%",
+      subtitle: "khi đặt vé xe Sài Gòn - Đà Lạt/Lâm Đồng",
+      image: "/api/placeholder/300/200"
+    },
+    {
+      title: "Giảm 15%",
+      subtitle: "khi đặt vé các nhà xe mới mở bán",
+      image: "/api/placeholder/300/200"
+    }
+  ]
+
+  const testimonials = [
+    {
+      name: "Anh Nguyễn Tuấn Quỳnh",
+      position: "CEO Saigon Books",
+      content: "Lần trước tôi có việc gấp phải đi công tác, lên mạng tìm đặt vé xe thì tình cờ tìm thấy Vexere. Sau khi tham khảo, tôi quyết định đặt vé và thanh toán. Công nhận rất tiện và nhanh chóng.",
+      avatar: "/api/placeholder/60/60"
+    },
+    {
+      name: "Shark Phi",
+      position: "Giám đốc BSSC",
+      content: "Các đối tác của Vexere đều là những hãng xe lớn, có uy tín nên tôi hoàn toàn yên tâm khi lựa chọn đặt vé cho bản thân và gia đình. Nhờ hiển thị rõ nhà xe và vị trí chỗ trống trên xe.",
+      avatar: "/api/placeholder/60/60"
+    }
+  ]
+    const router = useRouter();
+  const swapLocations = () => {
+    const temp = fromLocation
+    setFromLocation(toLocation)
+    setToLocation(temp)
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <NavigationBar currentPage="home" />
+
+      {/* Hero Section with Search */}
+      <section className="bg-gradient-to-r from-blue-600 to-blue-800 text-white">
+        <div className="container mx-auto px-4 py-16">
+          {/* Guarantee Banner */}
+          <div className="bg-yellow-400 text-black px-4 py-2 rounded-lg mb-8 text-center">
+            <span className="font-semibold">
+              Cam kết hoàn 150% nếu nhà xe không cung cấp dịch vụ vận chuyển (*)
+            </span>
+          </div>
+
+          {/* Service Tabs */}
+          <div className="flex flex-wrap gap-2 mb-8 justify-center md:justify-start">
+            {[
+              { id: "bus", label: "Xe khách", icon: Car },
+              { id: "flight", label: "Máy bay-20K", icon: Plane },
+              { id: "train", label: "Tàu hỏa", icon: Train },
+              { id: "rental", label: "Thuê xe", icon: Car, badge: "Mới" }
+            ].map(({ id, label, icon: Icon, badge }) => (
+              <button
+                key={id}
+                onClick={() => setActiveTab(id)}
+                className={`flex items-center space-x-2 px-4 py-3 rounded-lg transition-colors min-w-fit ${
+                  activeTab === id 
+                    ? "bg-white text-blue-600 shadow-md" 
+                    : "bg-blue-700 hover:bg-blue-600 text-white"
+                }`}
+              >
+                <Icon className="w-5 h-5" />
+                <span className="text-sm font-medium">{label}</span>
+                {badge && (
+                  <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
+                    {badge}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Search Form */}
+          <div className="bg-white rounded-xl p-6 text-black shadow-lg">
+            <div className={`grid gap-4 items-end ${showReturnDate ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-5' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4'}`}>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Nơi xuất phát</label>
+                <div className="relative">
+                  <Input
+                    placeholder="Chọn điểm đi"
+                    value={fromLocation}
+                    onChange={(e) => setFromLocation(e.target.value)}
+                    className="pr-10 h-12"
+                  />
+                  <MapPin className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                </div>
+              </div>
+              
+               <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Điểm đến</label>
+                <div className="relative">
+                  <Input
+                    placeholder="Chọn điểm đi"
+                    value={fromLocation}
+                    onChange={(e) => setFromLocation(e.target.value)}
+                    className="pr-10 h-12"
+                  />
+                  <MapPin className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                </div>
+              </div>
+              
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Ngày đi</label>
+                <div className="relative">
+                  <Input
+                    type="date"
+                    value={departureDate}
+                    onChange={(e) => setDepartureDate(e.target.value)}
+                    className="pr-10 h-12"  
+                  />
+                  <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                </div>
+              </div>
+
+              {showReturnDate && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Ngày về</label>
+                  <div className="relative">
+                    <Input
+                      type="date"
+                      value={returnDate}
+                      onChange={(e) => setReturnDate(e.target.value)}
+                      className="pr-10 h-12"
+                    />
+                    <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between min-h-[20px]">
+                  <label className="text-sm font-medium text-gray-700">
+                    {showReturnDate ? "Tìm kiếm" : "Tùy chọn"}
+                  </label>
+                  {!showReturnDate && (
+                    <button
+                      onClick={() => setShowReturnDate(true)}
+                      className="flex items-center space-x-1 text-blue-600 text-xs hover:underline"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>Thêm ngày về</span>
+                    </button>
+                  )}
+                </div>
+                <Button className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold h-12 w-full">
+                  <Search className="w-5 h-5 mr-2" />
+                  Tìm kiếm
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Features */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mt-12">
+            {[
+              { icon: CheckCircle, text: "Chắc chắn có chỗ" },
+              { icon: Headphones, text: "Hỗ trợ 24/7" },
+              { icon: Gift, text: "Nhiều ưu đãi" },
+              { icon: CreditCard, text: "Thanh toán đa dạng" }
+            ].map(({ icon: Icon, text }, index) => (
+              <div key={index} className="flex items-center space-x-3 text-yellow-300 bg-white/10 rounded-lg p-4 backdrop-blur-sm">
+                <Icon className="w-6 h-6 flex-shrink-0" />
+                <span className="text-sm font-medium">{text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+          {/* Popular Routes */}
+      <section className="py-16 bg-white">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold text-center mb-12 text-gray-900">Tuyến đường phổ biến</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {popularRoutes.map((route, index) => (
+              <div key={index} className="border border-gray-200 rounded-xl p-6 hover:shadow-lg hover:border-blue-200 transition-all duration-300 cursor-pointer bg-white">
+                <div className="text-lg font-semibold mb-3 text-gray-900">
+                  {route.from} - {route.to}
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-2xl font-bold text-blue-600">Từ {route.price}</span>
+                  {route.originalPrice && (
+                    <span className="text-gray-500 line-through text-sm">{route.originalPrice}</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Promotions */}
+      <section className="py-16 bg-gray-50">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold text-center mb-12 text-gray-900">Ưu đãi nổi bật</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {promotions.map((promo, index) => (
+              <div key={index} className="bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer group">
+                <div className="h-48 bg-gradient-to-r from-blue-500 to-purple-600 relative overflow-hidden">
+                  <div className="absolute inset-0 bg-black/10 group-hover:bg-black/20 transition-colors"></div>
+                </div>
+                <div className="p-6">
+                  <h3 className="font-semibold text-lg mb-2 text-gray-900 line-clamp-2">{promo.title}</h3>
+                  <p className="text-gray-600 text-sm leading-relaxed">{promo.subtitle}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Customer Testimonials */}
+      <section className="py-16 bg-white">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold text-center mb-12 text-gray-900">Khách hàng nói gì về Vexere</h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto">
+            {testimonials.map((testimonial, index) => (
+              <div key={index} className="bg-gray-50 rounded-xl p-8 hover:shadow-lg transition-all duration-300">
+                <div className="flex items-start space-x-4">
+                  <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold text-lg">
+                    {testimonial.name.split(' ').slice(-1)[0].charAt(0)}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-1 mb-3">
+                      {[...Array(5)].map((_, i) => (
+                        <Star key={i} className="w-5 h-5 fill-yellow-400 text-yellow-400" />
+                      ))}
+                    </div>
+                    <h4 className="font-semibold text-lg text-gray-900 mb-1">{testimonial.name}</h4>
+                    <p className="text-sm text-blue-600 mb-4 font-medium">{testimonial.position}</p>
+                    <p className="text-gray-700 text-sm leading-relaxed">{testimonial.content}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Platform Info */}
+      <section className="py-20 bg-blue-600 text-white">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold text-center mb-16">Nền tảng kết nối người dùng và nhà xe</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            {[
+              { 
+                icon: Car, 
+                title: "2000+ nhà xe chất lượng cao", 
+                description: "5000+ tuyến đường trên toàn quốc, chủ động và đa dạng lựa chọn." 
+              },
+              { 
+                icon: Clock, 
+                title: "Đặt vé dễ dàng", 
+                description: "Đặt vé chỉ với 60s. Chọn xe yêu thích cực nhanh và thuận tiện." 
+              },
+              { 
+                icon: Shield, 
+                title: "Chắc chắn có chỗ", 
+                description: "Hoàn ngay 150% nếu nhà xe không cung cấp dịch vụ vận chuyển, mang đến hành trình trọn vẹn." 
+              },
+              { 
+                icon: Gift, 
+                title: "Nhiều ưu đãi", 
+                description: "Hàng ngàn ưu đãi cực chất độc quyền tại Vexere." 
+              }
+            ].map(({ icon: Icon, title, description }, index) => (
+              <div key={index} className="text-center group">
+                <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:bg-white/30 transition-colors">
+                  <Icon className="w-10 h-10" />
+                </div>
+                <h3 className="text-xl font-semibold mb-4">{title}</h3>
+                <p className="text-blue-100 text-sm leading-relaxed">{description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-gray-900 text-white py-16">
+        <div className="container mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            <div className="lg:col-span-1">
+              <div className="text-2xl font-bold text-blue-400 mb-6">Vexere</div>
+              <p className="text-gray-400 text-sm mb-6 leading-relaxed">
+                Công ty TNHH Thương Mại Dịch Vụ Vexere
+              </p>
+              <div className="flex space-x-4">
+                <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center hover:bg-blue-700 transition-colors cursor-pointer"></div>
+                <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center hover:bg-red-700 transition-colors cursor-pointer"></div>
+                <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-gray-700 transition-colors cursor-pointer"></div>
+              </div>
+            </div>
+            
+            <div>
+              <h4 className="font-semibold mb-6 text-lg">Hỗ trợ</h4>
+              <ul className="space-y-3 text-sm text-gray-400">
+                <li><a href="#" className="hover:text-white transition-colors">Hướng dẫn thanh toán</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Quy chế Vexere.com</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Chính sách bảo mật</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Câu hỏi thường gặp</a></li>
+              </ul>
+            </div>
+            
+            <div>
+              <h4 className="font-semibold mb-6 text-lg">Về chúng tôi</h4>
+              <ul className="space-y-3 text-sm text-gray-400">
+                <li><a href="#" className="hover:text-white transition-colors">Giới thiệu Vexere.com</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Tuyển dụng</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Tin tức</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Liên hệ</a></li>
+              </ul>
+            </div>
+            
+            <div>
+              <h4 className="font-semibold mb-6 text-lg">Tải ứng dụng Vexere</h4>
+              <div className="space-y-4">
+                <div className="w-40 h-12 bg-black rounded-lg flex items-center justify-center text-xs font-medium hover:bg-gray-800 transition-colors cursor-pointer">
+                  📱 App Store
+                </div>
+                <div className="w-40 h-12 bg-black rounded-lg flex items-center justify-center text-xs font-medium hover:bg-gray-800 transition-colors cursor-pointer">
+                  🤖 Google Play
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="border-t border-gray-800 mt-12 pt-8 text-center text-sm text-gray-400">
+            <p>Bản quyền © 2025 thuộc về Vexere.com</p>
+          </div>
+        </div>
+      </footer>
+    </div>
+  )
+}
