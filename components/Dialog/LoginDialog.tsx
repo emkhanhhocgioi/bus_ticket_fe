@@ -13,7 +13,7 @@ import {
 import { Car, Mail, Phone, Eye, EyeOff, Users, User } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { login } from "@/api/auth";
+import { login, loginPartner } from "@/api/auth";
 import { useNotification, NotificationPopup } from "@/components/Dialog/notifiactions";
 import { useAuth } from "@/context/AuthContext";
 
@@ -43,9 +43,15 @@ export default function LoginDialog({ children }: LoginDialogProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      let response;
+      
       if (loginMethod === "email") {
         const { email } = formData;
-        const response = await login(email, formData.password);
+        if (userType === "partner") {
+          response = await loginPartner(email, formData.password);
+        } else {
+          response = await login(email, formData.password);
+        }
         console.log("Login response:", response);
         
         // Console log token nếu có
@@ -53,52 +59,64 @@ export default function LoginDialog({ children }: LoginDialogProps) {
           console.log("Token:", response.token);
         }
         
-        if (response.message === "Login successful") {
+        if (response.message === "Login successful" || response.message === "Partner login successful") {
           // Hiển thị thông báo thành công
           showNotification("success", "Hệ thống", "Đăng nhập thành công! Chào mừng bạn trở lại.");
           
           // Sử dụng AuthContext để cập nhật trạng thái đăng nhập
-          authLogin(response.user || response, response.token);
+          authLogin(response.user || response.partner || response, response.token);
           
           // Đóng modal trước khi navigate
           setOpen(false);
           
-          // Navigate đến trang chính thay vì dashboard
-          setTimeout(() => {
-            if (userType === "partner") {
-              router.push("/partner");
-            } else {
-              router.push("/home");
+          // Navigate đến trang chính
+          if (userType === "partner") {
+            console.log("Navigating to partner dashboard via email login...");
+            try {
+              router.push("/Dashboard");
+              console.log("Navigation attempted to /Dashboard");
+            } catch (error) {
+              console.error("Navigation error:", error);
             }
-          }, 500); // Delay nhỏ để thông báo hiển thị
+          } else {
+            router.push("/home");
+          }
         }
       } else {
         const { phone } = formData;
-        const response = await login(phone, formData.password);
+        if (userType === "partner") {
+          response = await loginPartner(phone, formData.password);
+        } else {
+          response = await login(phone, formData.password);
+        }
         
         // Console log token nếu có
         if (response.token) {
           console.log("Token:", response.token);
         }
         
-        if (response.message === "Login successful") {
+        if (response.message === "Login successful" || response.message === "Partner login successful") {
           // Hiển thị thông báo thành công
           showNotification("success", "Hệ thống", "Đăng nhập thành công! Chào mừng bạn trở lại.");
           
           // Sử dụng AuthContext để cập nhật trạng thái đăng nhập
-          authLogin(response.user || response, response.token);
+          authLogin(response.user || response.partner || response, response.token);
           
           // Đóng modal trước khi navigate
           setOpen(false);
           
-          // Navigate đến trang chính thay vì dashboard
-          setTimeout(() => {
-            if (userType === "partner") {
-              router.push("/partner");
-            } else {
-              router.push("/home");
+          // Navigate đến trang chính
+          if (userType === "partner") {
+            console.log("Navigating to partner dashboard via phone login...");
+            try {
+              router.push("/Dashboard");
+              console.log("Navigation attempted to /Dashboard");
+            } catch (error) {
+              console.error("Navigation error:", error);
             }
-          }, 500); // Delay nhỏ để thông báo hiển thị
+          } else {
+            router.push("/home");
+          }
         }
       }
     } catch (error) {

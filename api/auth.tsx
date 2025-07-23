@@ -34,6 +34,20 @@ export const register = async (name: string, email: string, phone: string, passw
     }
 };
 
+
+export const loginPartner = async (loginparam: string, password: string) => {
+    try {
+        const response = await axios.post(`${API_URL}/login/partner`, {
+            loginparam,
+            password,
+        });
+        return response.data;
+    } catch (error) {
+        throw new Error("Login failed");
+    }
+};
+
+
 export const createPartner = async (
     company: string,
     email: string,
