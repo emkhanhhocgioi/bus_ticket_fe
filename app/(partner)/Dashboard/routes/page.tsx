@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,7 +24,8 @@ import {
 import { Plus, Edit, Trash2, MapPin, Clock, DollarSign, Users } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Toast, useToast } from "@/components/ui/toast";
-import {createRoute} from "@/api/routes";
+import {createRoute, getRoutes, updateRoute, deleteRoute} from "@/api/routes";
+
 
 // Mock data interface
 interface Route {
@@ -37,6 +39,8 @@ interface Route {
   price: number;
   totalSeats: number;
   availableSeats: number;
+  busType: string;
+  licensePlate: string;
   description: string;
   createdAt?: string;
   updatedAt?: string;
@@ -50,11 +54,13 @@ const mockRoutes: Route[] = [
     partnerId: "partner1",
     from: "Hà Nội",
     to: "Đà Nẵng",
-    departureTime: "2025-01-25T08:00:00Z",
+    departureTime: "08:00",
     duration: "12 giờ",
     price: 450000,
     totalSeats: 45,
     availableSeats: 30,
+    busType: "Ghế ngồi",
+    licensePlate: "29A-12345",
     description: "Tuyến xe khách chất lượng cao, có wifi và điều hòa"
   },
   {
@@ -63,11 +69,13 @@ const mockRoutes: Route[] = [
     partnerId: "partner1",
     from: "TP. Hồ Chí Minh",
     to: "Nha Trang",
-    departureTime: "2025-01-25T14:30:00Z",
+    departureTime: "14:30",
     duration: "8 giờ",
     price: 320000,
     totalSeats: 40,
     availableSeats: 25,
+    busType: "Giường nằm",
+    licensePlate: "50A-67890",
     description: "Xe giường nằm cao cấp, phục vụ suất ăn nhẹ"
   },
   {
@@ -76,11 +84,13 @@ const mockRoutes: Route[] = [
     partnerId: "partner1",
     from: "Hà Nội",
     to: "Huế",
-    departureTime: "2025-01-25T20:00:00Z",
+    departureTime: "20:00",
     duration: "10 giờ",
     price: 380000,
     totalSeats: 35,
     availableSeats: 0,
+    busType: "Ghế ngồi",
+    licensePlate: "30B-11111",
     description: "Tuyến đường về miền Trung, ghế ngồi thoải mái"
   },
   {
@@ -89,11 +99,13 @@ const mockRoutes: Route[] = [
     partnerId: "partner1",
     from: "TP. Hồ Chí Minh",
     to: "Đà Lạt",
-    departureTime: "2025-01-26T06:00:00Z",
+    departureTime: "06:00",
     duration: "6 giờ",
     price: 290000,
     totalSeats: 32,
     availableSeats: 18,
+    busType: "Limousine",
+    licensePlate: "51C-22222",
     description: "Tuyến lên Đà Lạt, phong cảnh đẹp"
   },
   {
@@ -102,17 +114,20 @@ const mockRoutes: Route[] = [
     partnerId: "partner1",
     from: "Đà Nẵng",
     to: "Quy Nhon",
-    departureTime: "2025-01-26T09:30:00Z",
+    departureTime: "09:30",
     duration: "5 giờ",
     price: 250000,
     totalSeats: 38,
     availableSeats: 28,
+    busType: "Ghế ngồi",
+    licensePlate: "43D-33333",
     description: "Tuyến duyên hải miền Trung"
   }
 ];
 
 export default function RouteManagement() {
   const { user, token } = useAuth();
+  const router = useRouter();
   const { toast, showToast, hideToast } = useToast();
   const [routes, setRoutes] = useState<Route[]>(mockRoutes);
   const [loading, setLoading] = useState(false);
@@ -128,13 +143,14 @@ export default function RouteManagement() {
     price: "",
     totalSeats: "",
     availableSeats: "",
+    busType: "",
+    licensePlate: "",
     description: "",
   });
 
   useEffect(() => {
-    // Mock data is already loaded, no need to fetch
-    console.log("Routes loaded with mock data:", mockRoutes);
-  }, []);
+    fetchRoutes();
+  }, [user, token]);
 
   useEffect(() => {
     if (user) {
@@ -148,13 +164,34 @@ export default function RouteManagement() {
   const fetchRoutes = async () => {
     try {
       setLoading(true);
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setRoutes(mockRoutes);
-      showToast("success", "Thành công", "Đã tải danh sách tuyến đường");
+      
+      if (!token || !user?.id) {
+        console.log("No token or user ID available, using mock data");
+        setRoutes(mockRoutes);
+        return;
+      }
+      
+      console.log("Fetching routes for partnerId:", user.id);
+      const response = await getRoutes(user.id, token);
+      console.log("Raw API response:", response);
+      
+      if (response && response.data && Array.isArray(response.data)) {
+        setRoutes(response.data);
+        console.log("Fetched routes:", response.data);
+      } else if (response && Array.isArray(response)) {
+        // Trường hợp API trả về array trực tiếp thay vì wrapped trong data
+        setRoutes(response);
+        console.log("Fetched routes (direct array):", response);
+      } else {
+        // Fallback to mock data if no routes returned
+        setRoutes(mockRoutes);
+        showToast("info", "Thông báo", "Chưa có tuyến đường nào, hiển thị dữ liệu mẫu");
+      }
     } catch (error) {
       console.error("Failed to fetch routes:", error);
-      showToast("error", "Lỗi", "Không thể tải danh sách tuyến đường");
+      // Fallback to mock data on error
+      setRoutes(mockRoutes);
+      showToast("error", "Lỗi", "Không thể tải danh sách tuyến đường, hiển thị dữ liệu mẫu");
     } finally {
       setLoading(false);
     }
@@ -176,6 +213,8 @@ export default function RouteManagement() {
       price: "",
       totalSeats: "",
       availableSeats: "",
+      busType: "",
+      licensePlate: "",
       description: "",
     });
     setEditingRoute(null);
@@ -201,9 +240,15 @@ export default function RouteManagement() {
         "duration",
         "price",
         "totalSeats",
-        "availableSeats",
+        "busType",
+        "licensePlate",
         "description",
       ];
+
+      // Chỉ check availableSeats khi đang edit
+      if (editingRoute) {
+        requiredFields.push("availableSeats");
+      }
 
       for (const field of requiredFields) {
         if (!formData[field as keyof typeof formData] || formData[field as keyof typeof formData].toString().trim() === "") {
@@ -222,35 +267,48 @@ export default function RouteManagement() {
         duration: formData.duration,
         price: parseFloat(formData.price),
         totalSeats: parseInt(formData.totalSeats),
-        availableSeats: parseInt(formData.availableSeats),
+        busType: formData.busType,
+        licensePlate: formData.licensePlate,
         description: formData.description,
+        // Chỉ thêm availableSeats khi update, không thêm khi create
+        ...(editingRoute && { availableSeats: parseInt(formData.availableSeats) }),
       };
 
-      const response = await createRoute(routeData, token);
+      console.log("Sending route data:", routeData);
       
-      console.log("API Response:", response);
+      let response;
+      if (editingRoute) {
+        // Update existing route
+        response = await updateRoute(editingRoute._id!, routeData, token);
+        console.log("Update API Response:", response);
+        
+        if (response) {
+          console.log("Route updated successfully:", response);
+          showToast("success", "Thành công", "Đã cập nhật tuyến đường thành công");
+        }
+      } else {
+        // Create new route
+        response = await createRoute(routeData, token);
+        console.log("Create API Response:", response);
+        
+        if (response) {
+          console.log("Route created successfully:", response);
+          showToast("success", "Thành công", "Đã tạo tuyến đường mới thành công");
+        }
+      }
       
       if (response) {
-        console.log("Route created successfully:", response);
-        showToast("success", "Thành công", "Đã tạo tuyến đường mới thành công");
-        
-        // Thêm route mới vào danh sách hiện tại
-        const newRoute = {
-          _id: response._id || Date.now().toString(),
-          ...routeData,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        console.log("New route to be added:", newRoute);
-        setRoutes(prev => [...prev, newRoute]);
-        
         // Reset form và đóng dialog
         resetForm();
         setIsDialogOpen(false);
+        
+        // Gọi lại fetchRoutes để lấy dữ liệu mới nhất từ server
+        await fetchRoutes();
       }
     } catch (error) {
-      console.error("Failed to create route:", error);
-      showToast("error", "Lỗi", "Có lỗi xảy ra khi tạo tuyến đường. Vui lòng thử lại.");
+      console.error("Failed to create/update route:", error);
+      const action = editingRoute ? "cập nhật" : "tạo";
+      showToast("error", "Lỗi", `Có lỗi xảy ra khi ${action} tuyến đường. Vui lòng thử lại.`);
     } finally {
       setLoading(false);
     }
@@ -268,6 +326,8 @@ export default function RouteManagement() {
       price: route.price.toString(),
       totalSeats: route.totalSeats.toString(),
       availableSeats: route.availableSeats.toString(),
+      busType: route.busType,
+      licensePlate: route.licensePlate,
       description: route.description,
     });
     setIsDialogOpen(true);
@@ -281,10 +341,9 @@ export default function RouteManagement() {
 
     if (confirm("Bạn có chắc chắn muốn xóa tuyến đường này?")) {
       try {
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await deleteRoute(routeId, token);
         
-        // Remove route from mock data
+        // Remove route from state
         const updatedRoutes = routes.filter(route => route._id !== routeId);
         setRoutes(updatedRoutes);
         showToast("success", "Thành công", "Đã xóa tuyến đường");
@@ -304,6 +363,10 @@ export default function RouteManagement() {
 
   const formatTime = (time: string) => {
     return new Date(time).toLocaleString('vi-VN');
+  };
+
+  const handleRouteClick = (routeId: string) => {
+    router.push(`/Dashboard/order/${routeId}`);
   };
 
   return (
@@ -381,13 +444,14 @@ export default function RouteManagement() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="departureTime">Thời gian khởi hành</Label>
+                  <Label htmlFor="departureTime">Giờ khởi hành</Label>
                   <Input
                     id="departureTime"
                     name="departureTime"
-                    type="datetime-local"
+                    type="time"
                     value={formData.departureTime}
                     onChange={handleInputChange}
+                    placeholder="VD: 08:00"
                     required
                   />
                 </div>
@@ -438,6 +502,37 @@ export default function RouteManagement() {
                     value={formData.availableSeats}
                     onChange={handleInputChange}
                     placeholder="45"
+                    required={!!editingRoute}
+                    disabled={!editingRoute}
+                  />
+                  {!editingRoute && (
+                    <p className="text-sm text-gray-500 mt-1">
+                      Sẽ được tự động đặt bằng tổng số ghế khi tạo mới
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="busType">Loại xe</Label>
+                  <Input
+                    id="busType"
+                    name="busType"
+                    value={formData.busType}
+                    onChange={handleInputChange}
+                    placeholder="VD: Ghế ngồi, Giường nằm, Limousine"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="licensePlate">Biển số xe</Label>
+                  <Input
+                    id="licensePlate"
+                    name="licensePlate"
+                    value={formData.licensePlate}
+                    onChange={handleInputChange}
+                    placeholder="VD: 29A-12345"
                     required
                   />
                 </div>
@@ -541,17 +636,23 @@ export default function RouteManagement() {
                 <TableRow>
                   <TableHead>Mã tuyến</TableHead>
                   <TableHead>Tuyến đường</TableHead>
-                  <TableHead>Thời gian khởi hành</TableHead>
+                  <TableHead>Giờ khởi hành</TableHead>
                   <TableHead>Thời gian di chuyển</TableHead>
                   <TableHead>Giá vé</TableHead>
                   <TableHead>Ghế</TableHead>
+                  <TableHead>Loại xe</TableHead>
+                  <TableHead>Biển số xe</TableHead>
                   <TableHead>Trạng thái</TableHead>
                   <TableHead className="text-right">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {routes.map((route) => (
-                  <TableRow key={route._id}>
+                  <TableRow 
+                    key={route._id} 
+                    className="cursor-pointer hover:bg-gray-50 transition-colors"
+                    onClick={() => handleRouteClick(route._id)}
+                  >
                     <TableCell className="font-medium">{route.routeCode}</TableCell>
                     <TableCell>
                       <div className="flex items-center">
@@ -562,7 +663,7 @@ export default function RouteManagement() {
                     <TableCell>
                       <div className="flex items-center">
                         <Clock className="w-4 h-4 text-gray-400 mr-1" />
-                        {formatTime(route.departureTime)}
+                        {route.departureTime}
                       </div>
                     </TableCell>
                     <TableCell>{route.duration}</TableCell>
@@ -578,6 +679,8 @@ export default function RouteManagement() {
                         {route.availableSeats}/{route.totalSeats}
                       </div>
                     </TableCell>
+                    <TableCell>{route.busType}</TableCell>
+                    <TableCell>{route.licensePlate}</TableCell>
                     <TableCell>
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                         route.availableSeats > 0 
@@ -592,14 +695,20 @@ export default function RouteManagement() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleEdit(route)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(route);
+                          }}
                         >
                           <Edit className="w-4 h-4" />
                         </Button>
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleDelete(route._id!)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(route._id!);
+                          }}
                           className="text-red-600 hover:text-red-700"
                         >
                           <Trash2 className="w-4 h-4" />

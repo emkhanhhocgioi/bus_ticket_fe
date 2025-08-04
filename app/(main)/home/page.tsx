@@ -3,12 +3,13 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import NavigationBar from "@/components/navigation/navigationbar"
+import vietnamProvinces from "@/constant/province"
 import { 
   Search, 
   ArrowLeftRight, 
   Calendar, 
-  Plus, 
   CheckCircle, 
   Headphones, 
   Gift,
@@ -31,8 +32,6 @@ export default function HomePage() {
   const [fromLocation, setFromLocation] = useState("")
   const [toLocation, setToLocation] = useState("")
   const [departureDate, setDepartureDate] = useState("")
-  const [returnDate, setReturnDate] = useState("")
-  const [showReturnDate, setShowReturnDate] = useState(false)
 
   const popularRoutes = [
     { from: "Sài Gòn", to: "Đà Lạt", price: "199.000đ", originalPrice: "400.000đ" },
@@ -85,6 +84,15 @@ export default function HomePage() {
     setToLocation(temp)
   }
 
+  const handleSearch = () => {
+    const params = new URLSearchParams()
+    if (fromLocation) params.set('from', fromLocation)
+    if (toLocation) params.set('to', toLocation)
+    if (departureDate) params.set('time', departureDate)
+    
+    router.push(`/search?${params.toString()}`)
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -130,78 +138,78 @@ export default function HomePage() {
 
           {/* Search Form */}
           <div className="bg-white rounded-xl p-6 text-black shadow-lg">
-            <div className={`grid gap-4 items-end ${showReturnDate ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-5' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4'}`}>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Nơi xuất phát</label>
-                <div className="relative">
-                  <Input
-                    placeholder="Chọn điểm đi"
-                    value={fromLocation}
-                    onChange={(e) => setFromLocation(e.target.value)}
-                    className="pr-10 h-12"
-                  />
-                  <MapPin className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                </div>
-              </div>
-              
-               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Điểm đến</label>
-                <div className="relative">
-                  <Input
-                    placeholder="Chọn điểm đi"
-                    value={fromLocation}
-                    onChange={(e) => setFromLocation(e.target.value)}
-                    className="pr-10 h-12"
-                  />
-                  <MapPin className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                </div>
-              </div>
-              
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Ngày đi</label>
-                <div className="relative">
-                  <Input
-                    type="date"
-                    value={departureDate}
-                    onChange={(e) => setDepartureDate(e.target.value)}
-                    className="pr-10 h-12"  
-                  />
-                  <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                </div>
-              </div>
-
-              {showReturnDate && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Ngày về</label>
-                  <div className="relative">
-                    <Input
-                      type="date"
-                      value={returnDate}
-                      onChange={(e) => setReturnDate(e.target.value)}
-                      className="pr-10 h-12"
-                    />
-                    <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <div className="grid gap-4 items-end grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+              {/* Location Selection Container */}
+              <div className="md:col-span-2 lg:col-span-2 relative">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">Nơi xuất phát</label>
+                    <div className="relative">
+                      <Select value={fromLocation} onValueChange={setFromLocation}>
+                        <SelectTrigger className="pr-10 h-12 w-full border border-gray-300 rounded-md bg-white">
+                          <SelectValue placeholder="Chọn điểm đi" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {vietnamProvinces.map((province) => (
+                            <SelectItem key={province} value={province}>
+                              {province}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <MapPin className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                    </div>
                   </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">Điểm đến</label>
+                    <div className="relative">
+                      <Select value={toLocation} onValueChange={setToLocation}>
+                        <SelectTrigger className="pr-10 h-12 w-full border border-gray-300 rounded-md bg-white">
+                          <SelectValue placeholder="Chọn điểm đến" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {vietnamProvinces.map((province) => (
+                            <SelectItem key={province} value={province}>
+                              {province}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <MapPin className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                    </div>
+                  </div>
+                  
                 </div>
-              )}
+              </div>
+              
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">Thời gian khởi hành</label>
+                <div className="relative flex items-center space-x-2">
+                  <Input
+                  type="time"
+                  value={departureDate}
+                  onChange={(e) => setDepartureDate(e.target.value)}
+                  className="pr-10 h-12 w-full border border-gray-300 rounded-md bg-white"
+                  />
+                  <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs pointer-events-none">
+                  {departureDate && (parseInt(departureDate.split(":")[0]) >= 12 ? "PM" : "AM")}
+                  </span>
+                  <Clock className="absolute right-10 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between min-h-[20px]">
                   <label className="text-sm font-medium text-gray-700">
-                    {showReturnDate ? "Tìm kiếm" : "Tùy chọn"}
+                    Tìm kiếm
                   </label>
-                  {!showReturnDate && (
-                    <button
-                      onClick={() => setShowReturnDate(true)}
-                      className="flex items-center space-x-1 text-blue-600 text-xs hover:underline"
-                    >
-                      <Plus className="w-3 h-3" />
-                      <span>Thêm ngày về</span>
-                    </button>
-                  )}
                 </div>
-                <Button className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold h-12 w-full">
+                <Button 
+                  onClick={handleSearch}
+                  className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold h-12 w-full"
+                >
                   <Search className="w-5 h-5 mr-2" />
                   Tìm kiếm
                 </Button>
