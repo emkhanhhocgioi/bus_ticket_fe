@@ -1,9 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import NavigationBar from "@/components/navigation/navigationbar"
+import { getOrderByUserId } from "@/api/order"
+import { useAuth } from "@/context/AuthContext"
 import { 
   Search, 
   Filter,
@@ -18,85 +20,95 @@ import {
   AlertCircle,
   Eye,
   Download,
-  RefreshCw
+  RefreshCw,
+  Loader2
 } from "lucide-react"
+
+interface BookingData {
+  id: string;
+  route: string;
+  from: string;
+  to: string;
+  departureTime: string;
+  duration: string;
+  busType: string;
+  price: string;
+  status: string;
+  passengerName: string;
+  phone: string;
+  email: string;
+  bookingDate: string;
+  paymentMethod: string;
+  company: string;
+}
 
 export default function OrderPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
   const [sortBy, setSortBy] = useState("newest")
+  const [bookings, setBookings] = useState<BookingData[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  
+  const { user, token, isLoggedIn } = useAuth()
 
-  // Sample booking data
-  const bookings = [
-    {
-      id: "VX2025001",
-      route: "Sài Gòn - Đà Lạt",
-      departure: "2025-01-25",
-      departureTime: "08:00",
-      arrival: "2025-01-25",
-      arrivalTime: "13:30",
-      busCompany: "Phương Trang",
-      busType: "Giường nằm VIP",
-      seat: "A12",
-      price: "199.000đ",
-      status: "confirmed",
-      passengerName: "Nguyễn Văn An",
-      phone: "0901234567",
-      bookingDate: "2025-01-20",
-      paymentMethod: "VNPay"
-    },
-    {
-      id: "VX2025002", 
-      route: "Hà Nội - Hải Phòng",
-      departure: "2025-01-28",
-      departureTime: "14:00",
-      arrival: "2025-01-28", 
-      arrivalTime: "16:30",
-      busCompany: "Hoàng Long",
-      busType: "Ghế ngồi",
-      seat: "B08",
-      price: "120.000đ",
-      status: "pending",
-      passengerName: "Trần Thị Bình",
-      phone: "0907654321",
-      bookingDate: "2025-01-22",
-      paymentMethod: "Tiền mặt"
-    },
-    {
-      id: "VX2025003",
-      route: "Sài Gòn - Nha Trang", 
-      departure: "2025-01-15",
-      departureTime: "22:00",
-      arrival: "2025-01-16",
-      arrivalTime: "07:00",
-      busCompany: "Thành Bưởi",
-      busType: "Giường nằm",
-      seat: "C15",
-      price: "200.000đ",
-      status: "completed",
-      passengerName: "Lê Minh Cường",
-      phone: "0912345678",
-      bookingDate: "2025-01-10",
-      paymentMethod: "MoMo"
-    },
-    {
-      id: "VX2025004",
-      route: "Đà Nẵng - Hội An",
-      departure: "2025-01-30",
-      departureTime: "09:00", 
-      arrival: "2025-01-30",
-      arrivalTime: "10:00",
-      busCompany: "Sinh Tourist",
-      busType: "Limousine",
-      seat: "L02",
-      price: "80.000đ",
-      status: "cancelled",
-      passengerName: "Phạm Thị Dung",
-      phone: "0923456789",
-      bookingDate: "2025-01-18",
-      paymentMethod: "ZaloPay"
+  // Fetch orders from API
+  const fetchOrders = async () => {
+    if (!isLoggedIn || !user?.id || !token) {
+      console.log("Cannot fetch orders - missing auth data:", { isLoggedIn, userId: user?.id, hasToken: !!token })
+      setLoading(false)
+      return
     }
-  ]
+
+    try {
+      setLoading(true)
+      setError(null)
+      console.log("Fetching orders for user:", user.id)
+      const response = await getOrderByUserId(user.id, token)
+      console.log("Orders response:", response)
+      console.log("Raw order data:", response?.data || response)
+      
+      // Transform API response to match the expected format
+      const transformedOrders = (response?.data || response || []).map((order: any) => ({
+        id: order._id || order.id || `ORDER_${Date.now()}_${Math.random()}`,
+        route: `${order.routeId?.from || order.routeInfo?.from || 'N/A'} - ${order.routeId?.to || order.routeInfo?.to || 'N/A'}`,
+        from: order.routeId?.from || order.routeInfo?.from || 'N/A',
+        to: order.routeId?.to || order.routeInfo?.to || 'N/A',
+        departureTime: order.routeId?.departureTime || order.routeInfo?.departureTime || "00:00",
+        duration: order.routeId?.duration || order.routeInfo?.duration || "N/A",
+        busType: order.routeId?.busType || order.routeInfo?.busType || "N/A",
+        price: order.basePrice ? `${order.basePrice.toLocaleString('vi-VN')}đ` : 
+               order.total ? `${order.total.toLocaleString('vi-VN')}đ` : "0đ",
+        status: order.orderStatus || order.status || "pending",
+        passengerName: order.fullName || order.customerName || "N/A",
+        phone: order.phone || "N/A",
+        email: order.email || "N/A",
+        bookingDate: order.createdAt ? 
+          new Date(order.createdAt).toLocaleDateString('vi-VN') : 
+          new Date().toLocaleDateString('vi-VN'),
+        paymentMethod: order.paymentMethod === 'cash' ? 'Tiền mặt' : 
+                      order.paymentMethod === 'card' ? 'Thẻ' :
+                      order.paymentMethod === 'transfer' ? 'Chuyển khoản' :
+                      order.paymentMethod || "N/A",
+        company: order.company || order.routeId?.company || "N/A"
+      }))
+      
+      console.log("Transformed orders:", transformedOrders)
+      setBookings(transformedOrders)
+    } catch (err: any) {
+      console.error("Error fetching orders:", err)
+      setError("Không thể tải danh sách đơn hàng. Vui lòng thử lại sau.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchOrders()
+  }, [user?.id, token, isLoggedIn])
+
+  // Sample booking data (removed from here)
+  // const bookings = [...]
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -147,7 +159,9 @@ export default function OrderPage() {
     .filter(booking => {
       const matchesSearch = booking.route.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            booking.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           booking.passengerName.toLowerCase().includes(searchTerm.toLowerCase())
+                           booking.passengerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           booking.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           booking.phone.includes(searchTerm)
       const matchesFilter = filterStatus === "all" || booking.status === filterStatus
       return matchesSearch && matchesFilter
     })
@@ -158,7 +172,7 @@ export default function OrderPage() {
         case "oldest":
           return new Date(a.bookingDate).getTime() - new Date(b.bookingDate).getTime()
         case "departure":
-          return new Date(a.departure).getTime() - new Date(b.departure).getTime()
+          return a.departureTime.localeCompare(b.departureTime)
         default:
           return 0
       }
@@ -181,11 +195,11 @@ export default function OrderPage() {
       <div className="container mx-auto px-4 py-8">
         {/* Search and Filter Bar */}
         <div className="bg-white rounded-xl p-6 shadow-sm mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div className="md:col-span-2">
               <div className="relative">
                 <Input
-                  placeholder="Tìm kiếm theo mã đơn, tuyến đường hoặc tên hành khách..."
+                  placeholder="Tìm kiếm theo mã đơn, tuyến đường, tên hành khách, nhà xe hoặc số điện thoại..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pr-10 h-11"
@@ -216,8 +230,24 @@ export default function OrderPage() {
               >
                 <option value="newest">Mới nhất</option>
                 <option value="oldest">Cũ nhất</option>
-                <option value="departure">Theo ngày đi</option>
+                <option value="departure">Theo giờ khởi hành</option>
               </select>
+            </div>
+
+            <div>
+              <Button 
+                onClick={fetchOrders}
+                variant="outline" 
+                className="w-full h-11"
+                disabled={loading}
+              >
+                {loading ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                )}
+                Làm mới
+              </Button>
             </div>
           </div>
         </div>
@@ -281,11 +311,37 @@ export default function OrderPage() {
 
         {/* Booking List */}
         <div className="space-y-6">
-          {filteredBookings.length === 0 ? (
+          {!isLoggedIn ? (
+            <div className="bg-white rounded-xl p-12 text-center shadow-sm">
+              <AlertCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Vui lòng đăng nhập</h3>
+              <p className="text-gray-600">Bạn cần đăng nhập để xem danh sách đơn hàng</p>
+            </div>
+          ) : loading ? (
+            <div className="bg-white rounded-xl p-12 text-center shadow-sm">
+              <Loader2 className="w-16 h-16 text-blue-500 mx-auto mb-4 animate-spin" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Đang tải...</h3>
+              <p className="text-gray-600">Vui lòng đợi trong giây lát</p>
+            </div>
+          ) : error ? (
+            <div className="bg-white rounded-xl p-12 text-center shadow-sm">
+              <XCircle className="w-16 h-16 text-red-300 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Có lỗi xảy ra</h3>
+              <p className="text-gray-600 mb-4">{error}</p>
+              <Button onClick={fetchOrders} variant="outline">
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Thử lại
+              </Button>
+            </div>
+          ) : filteredBookings.length === 0 ? (
             <div className="bg-white rounded-xl p-12 text-center shadow-sm">
               <Car className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Không tìm thấy đơn hàng</h3>
-              <p className="text-gray-600">Thử điều chỉnh bộ lọc hoặc tìm kiếm với từ khóa khác</p>
+              <p className="text-gray-600">
+                {searchTerm || filterStatus !== "all" 
+                  ? "Thử điều chỉnh bộ lọc hoặc tìm kiếm với từ khóa khác" 
+                  : "Bạn chưa có đơn hàng nào"}
+              </p>
             </div>
           ) : (
             filteredBookings.map((booking) => (
@@ -314,16 +370,16 @@ export default function OrderPage() {
                       <div className="flex items-center space-x-3">
                         <Calendar className="w-5 h-5 text-gray-400" />
                         <div>
-                          <p className="text-sm text-gray-600">Ngày đi</p>
-                          <p className="font-medium">{new Date(booking.departure).toLocaleDateString('vi-VN')} - {booking.departureTime}</p>
+                          <p className="text-sm text-gray-600">Ngày đặt</p>
+                          <p className="font-medium">{booking.bookingDate}</p>
                         </div>
                       </div>
                       
                       <div className="flex items-center space-x-3">
                         <Clock className="w-5 h-5 text-gray-400" />
                         <div>
-                          <p className="text-sm text-gray-600">Thời gian dự kiến</p>
-                          <p className="font-medium">{booking.departureTime} - {booking.arrivalTime}</p>
+                          <p className="text-sm text-gray-600">Thời gian khởi hành</p>
+                          <p className="font-medium">{booking.departureTime}</p>
                         </div>
                       </div>
                       
@@ -331,7 +387,7 @@ export default function OrderPage() {
                         <Car className="w-5 h-5 text-gray-400" />
                         <div>
                           <p className="text-sm text-gray-600">Nhà xe</p>
-                          <p className="font-medium">{booking.busCompany}</p>
+                          <p className="font-medium">{booking.company}</p>
                         </div>
                       </div>
                     </div>
@@ -346,10 +402,10 @@ export default function OrderPage() {
                       </div>
                       
                       <div className="flex items-center space-x-3">
-                        <Star className="w-5 h-5 text-gray-400" />
+                        <Clock className="w-5 h-5 text-gray-400" />
                         <div>
-                          <p className="text-sm text-gray-600">Ghế</p>
-                          <p className="font-medium">{booking.seat}</p>
+                          <p className="text-sm text-gray-600">Thời gian di chuyển</p>
+                          <p className="font-medium">{booking.duration}</p>
                         </div>
                       </div>
                       

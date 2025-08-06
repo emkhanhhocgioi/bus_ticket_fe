@@ -384,7 +384,7 @@ export default function TicketPage() {
                   </div>
                   <h4 className="font-semibold text-gray-900 mb-2">Sẵn sàng đặt vé?</h4>
                   <p className="text-sm text-gray-600">
-                    Chọn số ghế và hoàn tất thanh toán
+                    Điền thông tin và hoàn tất thanh toán
                   </p>
                 </div>
 
@@ -432,19 +432,10 @@ export default function TicketPage() {
           {/* How to Book */}
           <div className="mt-8 bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Quy trình đặt vé</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-medium">
                   1
-                </div>
-                <div>
-                  <p className="font-medium text-gray-900">Chọn ghế ngồi</p>
-                  <p className="text-sm text-gray-600">Xem sơ đồ và chọn vị trí</p>
-                </div>
-              </div>
-              <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-medium">
-                  2
                 </div>
                 <div>
                   <p className="font-medium text-gray-900">Nhập thông tin</p>
@@ -453,7 +444,7 @@ export default function TicketPage() {
               </div>
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-medium">
-                  3
+                  2
                 </div>
                 <div>
                   <p className="font-medium text-gray-900">Thanh toán</p>

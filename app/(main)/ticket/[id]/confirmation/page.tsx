@@ -35,6 +35,7 @@ import {
   Check
 } from "lucide-react"
 import { useParams, useRouter } from "next/navigation"
+import { useAuth } from "@/context/AuthContext"
 
 interface RouteDetails {
   id: string
@@ -111,10 +112,10 @@ const paymentMethods: PaymentMethod[] = [
 export default function ConfirmationPage() {
   const params = useParams()
   const router = useRouter()
+  const { user, token } = useAuth()
   const routeId = params.id
   const [loading, setLoading] = useState(true)
   const [route, setRoute] = useState<RouteDetails | null>(null)
-  const [selectedSeat, setSelectedSeat] = useState<string>('A01') // Mock selected seat
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [orderResponse, setOrderResponse] = useState<any>(null)
@@ -229,16 +230,18 @@ export default function ConfirmationPage() {
       // Prepare order data
       const orderData: Omit<Order, '_id' | 'createdAt' | 'updatedAt'> = {
         routeId: route.id,
-        seatNumber: selectedSeat,
+        bussinessId: route.operator.partnerId,
+        userId: user?.id,
         fullName: userInfo.fullName,
         phone: userInfo.phone,
         email: userInfo.email,
         paymentMethod: selectedPayment,
-        basePrice: route.pricing.total
+        basePrice: route.pricing.total,
+        orderStatus: 'pending'
       }
 
       // Create order
-      const response = await createOrder(orderData)
+      const response = await createOrder(orderData, token || undefined)
       setOrderResponse(response)
       setShowSuccessModal(true)
     } catch (error: any) {
@@ -282,10 +285,6 @@ export default function ConfirmationPage() {
               <div className="flex justify-between">
                 <span className="text-gray-600">Tuyến:</span>
                 <span className="font-medium">{route?.route.from} → {route?.route.to}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Số ghế:</span>
-                <span className="font-medium">{selectedSeat}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Hành khách:</span>
