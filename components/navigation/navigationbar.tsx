@@ -7,7 +7,7 @@ import LoginDialog from "@/components/Dialog/LoginDialog"
 import { useAuth } from "@/context/AuthContext"
 
 interface NavigationBarProps {
-  currentPage?: "home" | "order" | "partner"
+  currentPage?: "home" | "order" | "partner" | "dashboard"
 }
 
 export default function NavigationBar({ currentPage = "home" }: NavigationBarProps) {
@@ -65,6 +65,20 @@ export default function NavigationBar({ currentPage = "home" }: NavigationBarPro
               >
                 Trở thành đối tác
               </button>
+              {/* Hiển thị nút Quản lý nhà xe chỉ khi user là partner */}
+              {isLoggedIn && user?.role === 'partner' && (
+                <button
+                  className={`transition-colors ${
+                    currentPage === "dashboard" 
+                      ? "text-blue-600 font-medium" 
+                      : "text-gray-700 hover:text-blue-600"
+                  }`}
+                  onClick={() => router.push("/Dashboard")}
+                  type="button"
+                >
+                  Quản lý nhà xe
+                </button>
+              )}
             </nav>
           </div>
           <div className="flex items-center space-x-4">

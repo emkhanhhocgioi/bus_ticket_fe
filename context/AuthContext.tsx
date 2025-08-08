@@ -7,6 +7,7 @@ interface User {
   name?: string;
   email?: string;
   phone?: string;
+  role?: 'user' | 'partner' | 'admin';
 }
 
 interface AuthContextType {

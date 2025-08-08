@@ -63,8 +63,15 @@ export default function LoginDialog({ children }: LoginDialogProps) {
           // Hiển thị thông báo thành công
           showNotification("success", "Hệ thống", "Đăng nhập thành công! Chào mừng bạn trở lại.");
           
+          // Thêm role vào user data
+          const userData = response.user || response.partner || response;
+          const userWithRole = {
+            ...userData,
+            role: userType  // 'customer' hoặc 'partner'
+          };
+          
           // Sử dụng AuthContext để cập nhật trạng thái đăng nhập
-          authLogin(response.user || response.partner || response, response.token);
+          authLogin(userWithRole, response.token);
           
           // Đóng modal trước khi navigate
           setOpen(false);
@@ -99,8 +106,15 @@ export default function LoginDialog({ children }: LoginDialogProps) {
           // Hiển thị thông báo thành công
           showNotification("success", "Hệ thống", "Đăng nhập thành công! Chào mừng bạn trở lại.");
           
+          // Thêm role vào user data
+          const userData = response.user || response.partner || response;
+          const userWithRole = {
+            ...userData,
+            role: userType  // 'customer' hoặc 'partner'
+          };
+          
           // Sử dụng AuthContext để cập nhật trạng thái đăng nhập
-          authLogin(response.user || response.partner || response, response.token);
+          authLogin(userWithRole, response.token);
           
           // Đóng modal trước khi navigate
           setOpen(false);

@@ -116,4 +116,18 @@ export const rejectOrder = async (orderId: string, token: string) => {
     console.error("Failed to reject order:", error);
     throw new Error("Failed to reject order");
   }
+};
+
+export const searchOrdersByPhoneOrId = async (query: string) => {
+  try {
+    const response = await axios.get(`${API_URL}/passenger/${query}/tickets`, {
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+    return response.data;
+  } catch (error: any) {
+    console.error("Failed to search orders:", error);
+    throw new Error("Failed to search orders");
+  }
 };  

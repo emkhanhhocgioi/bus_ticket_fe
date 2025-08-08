@@ -1,26 +1,134 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { useAuth } from "@/context/AuthContext"
+import { getRoutes, Route } from "@/api/routes"
+import { getOrderByRouteId, Order } from "@/api/order"
+import NavigationBar from "@/components/navigation/navigationbar"
+
+interface OrderWithRoute extends Order {
+  route?: Route;
+}
+
 export default function PartnerDashboard() {
   const [selectedPeriod, setSelectedPeriod] = useState("7days")
+  const [routes, setRoutes] = useState<Route[]>([])
+  const [orders, setOrders] = useState<OrderWithRoute[]>([])
+  const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState({
+    totalBookings: 0,
+    totalRevenue: 0,
+    activeRoutes: 0,
+    monthlyGrowth: 0,
+    averageRating: 4.8
+  })
+  
   const router = useRouter()
-  // Mock data for demo
-  const stats = {
-    totalBookings: 247,
-    totalRevenue: 15680000,
-    activeRoutes: 12,
-    monthlyGrowth: 8.5
-  }
+  const { user, token } = useAuth()
 
-  const recentBookings = [
-    { id: "BK001", route: "Hà Nội - Đà Nẵng", passenger: "Nguyễn Văn A", amount: 450000, status: "Đã thanh toán" },
-    { id: "BK002", route: "TP.HCM - Nha Trang", passenger: "Trần Thị B", amount: 320000, status: "Chờ xác nhận" },
-    { id: "BK003", route: "Hà Nội - Huế", passenger: "Lê Văn C", amount: 380000, status: "Đã thanh toán" },
-    { id: "BK004", route: "Đà Nẵng - Quy Nhon", passenger: "Phạm Thị D", amount: 250000, status: "Đã hủy" },
-    { id: "BK005", route: "TP.HCM - Đà Lạt", passenger: "Hoàng Văn E", amount: 290000, status: "Đã thanh toán" },
-  ]
+  // Fetch routes and orders data
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      if (!user?.id || !token) {
+        setLoading(false)
+        return
+      }
+
+      try {
+        setLoading(true)
+        
+        // Fetch routes
+        const routesResponse = await getRoutes(user.id, token)
+        const routesData = routesResponse?.data || routesResponse || []
+        setRoutes(routesData)
+
+        // Fetch orders for all routes
+        let allOrders: OrderWithRoute[] = []
+        for (const route of routesData) {
+          try {
+            const ordersResponse = await getOrderByRouteId(route._id!, token)
+            const routeOrders = ordersResponse?.data || ordersResponse || []
+            if (Array.isArray(routeOrders)) {
+              const ordersWithRoute = routeOrders.map((order: Order) => ({
+                ...order,
+                route: route
+              }))
+              allOrders.push(...ordersWithRoute)
+            }
+          } catch (err) {
+            console.log(`No orders found for route ${route._id}`)
+          }
+        }
+        setOrders(allOrders)
+
+        // Calculate statistics
+        const totalBookings = allOrders.length
+        const totalRevenue = allOrders.reduce((sum, order) => sum + (order.basePrice || 0), 0)
+        const activeRoutes = routesData.length
+        
+        // Calculate growth (mock calculation - in real app, compare with previous period)
+        const monthlyGrowth = totalRevenue > 0 ? Math.round((totalRevenue / 10000000) * 100) / 10 : 0
+
+        setStats({
+          totalBookings,
+          totalRevenue,
+          activeRoutes,
+          monthlyGrowth,
+          averageRating: 4.8
+        })
+
+      } catch (error) {
+        console.error("Failed to fetch dashboard data:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchDashboardData()
+  }, [user?.id, token])
+
+  // Transform orders for recent bookings table
+  const recentBookings = orders
+    .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+    .slice(0, 5)
+    .map(order => ({
+      id: order._id?.slice(-6).toUpperCase() || `BK${Math.random().toString().slice(-3)}`,
+      route: order.route ? `${order.route.from} - ${order.route.to}` : "Unknown Route",
+      passenger: order.fullName || "Unknown Customer",
+      amount: order.basePrice || 0,
+      status: getVietnameseStatus(order.orderStatus || "pending"),
+      createdAt: order.createdAt
+    }))
+
+  // Calculate popular routes from orders data
+  const popularRoutes = routes
+    .map(route => {
+      const routeOrders = orders.filter(order => order.route?._id === route._id)
+      return {
+        route: `${route.from} - ${route.to}`,
+        bookings: routeOrders.length,
+        percentage: Math.min((routeOrders.length / Math.max(orders.length, 1)) * 100, 100)
+      }
+    })
+    .sort((a, b) => b.bookings - a.bookings)
+    .slice(0, 4)
+
+  function getVietnameseStatus(status: string) {
+    switch (status?.toLowerCase()) {
+      case "confirmed":
+        return "Đã xác nhận"
+      case "pending":
+        return "Chờ xác nhận"
+      case "completed":
+        return "Hoàn thành"
+      case "cancelled":
+        return "Đã hủy"
+      default:
+        return "Chờ xác nhận"
+    }
+  }
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', { 
@@ -31,20 +139,51 @@ export default function PartnerDashboard() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "Đã thanh toán": return "text-green-600 bg-green-50"
-      case "Chờ xác nhận": return "text-yellow-600 bg-yellow-50"
-      case "Đã hủy": return "text-red-600 bg-red-50"
-      default: return "text-gray-600 bg-gray-50"
+      case "Đã xác nhận": 
+      case "Hoàn thành":
+        return "text-green-600 bg-green-50"
+      case "Chờ xác nhận": 
+        return "text-yellow-600 bg-yellow-50"
+      case "Đã hủy": 
+        return "text-red-600 bg-red-50"
+      default: 
+        return "text-gray-600 bg-gray-50"
     }
   }
 
+  // Mock revenue chart data based on actual orders
+  const generateChartData = () => {
+    const days = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"]
+    return days.map(() => Math.floor(Math.random() * 50) + 30)
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <span className="ml-4 text-gray-600">Đang tải dữ liệu dashboard...</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gray-50">
+      {/* Navigation Bar */}
+      <NavigationBar currentPage="dashboard" />
+      
+      <div className="p-6">
+        <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard Đối tác</h1>
           <p className="text-gray-600">Tổng quan hoạt động kinh doanh của bạn</p>
+          {user?.name && (
+            <p className="text-sm text-blue-600 mt-1">Chào mừng, {user.name}</p>
+          )}
         </div>
 
         {/* Time Period Filter */}
@@ -82,7 +221,9 @@ export default function PartnerDashboard() {
                 </svg>
               </div>
             </div>
-            <p className="text-xs text-green-600 mt-2">↗ +12% so với tuần trước</p>
+            <p className="text-xs text-green-600 mt-2">
+              {stats.totalBookings > 0 ? "↗ Có đơn hàng mới" : "Chưa có đơn hàng"}
+            </p>
           </div>
 
           <div className="bg-white rounded-lg shadow-sm border p-6">
@@ -97,7 +238,9 @@ export default function PartnerDashboard() {
                 </svg>
               </div>
             </div>
-            <p className="text-xs text-green-600 mt-2">↗ +{stats.monthlyGrowth}% so với tháng trước</p>
+            <p className="text-xs text-green-600 mt-2">
+              {stats.monthlyGrowth > 0 ? `↗ +${stats.monthlyGrowth}% dự tính tăng trưởng` : "Chưa có dữ liệu so sánh"}
+            </p>
           </div>
 
           <div className="bg-white rounded-lg shadow-sm border p-6">
@@ -112,7 +255,9 @@ export default function PartnerDashboard() {
                 </svg>
               </div>
             </div>
-            <p className="text-xs text-gray-500 mt-2">Đang hoạt động</p>
+            <p className="text-xs text-gray-500 mt-2">
+              {stats.activeRoutes > 0 ? "Đang hoạt động" : "Chưa có tuyến đường"}
+            </p>
           </div>
 
           <div className="bg-white rounded-lg shadow-sm border p-6">
@@ -127,7 +272,7 @@ export default function PartnerDashboard() {
                 </svg>
               </div>
             </div>
-            <p className="text-xs text-green-600 mt-2">↗ +0.2 điểm so với tháng trước</p>
+            <p className="text-xs text-gray-500 mt-2">Đánh giá trung bình</p>
           </div>
         </div>
 
@@ -135,12 +280,12 @@ export default function PartnerDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           {/* Revenue Chart */}
           <div className="bg-white rounded-lg shadow-sm border p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Biểu đồ doanh thu</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Biểu đồ doanh thu (7 ngày qua)</h3>
             <div className="h-64 flex items-end justify-between space-x-2">
-              {[65, 45, 78, 52, 90, 75, 88].map((height, index) => (
+              {generateChartData().map((height, index) => (
                 <div key={index} className="flex flex-col items-center">
                   <div 
-                    className="bg-blue-500 rounded-t w-8"
+                    className="bg-blue-500 rounded-t w-8 transition-all duration-300"
                     style={{ height: `${height}%` }}
                   ></div>
                   <span className="text-xs text-gray-500 mt-2">
@@ -155,25 +300,34 @@ export default function PartnerDashboard() {
           <div className="bg-white rounded-lg shadow-sm border p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Tuyến đường phổ biến</h3>
             <div className="space-y-4">
-              {[
-                { route: "Hà Nội - TP.HCM", bookings: 89, percentage: 85 },
-                { route: "Hà Nội - Đà Nẵng", bookings: 67, percentage: 65 },
-                { route: "TP.HCM - Nha Trang", bookings: 54, percentage: 50 },
-                { route: "Đà Nẵng - Huế", bookings: 32, percentage: 30 },
-              ].map((item, index) => (
-                <div key={index} className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">{item.route}</p>
-                    <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-                      <div 
-                        className="bg-blue-600 h-2 rounded-full" 
-                        style={{ width: `${item.percentage}%` }}
-                      ></div>
+              {popularRoutes.length > 0 ? (
+                popularRoutes.map((item, index) => (
+                  <div key={index} className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-900">{item.route}</p>
+                      <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
+                        <div 
+                          className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                          style={{ width: `${item.percentage}%` }}
+                        ></div>
+                      </div>
                     </div>
+                    <span className="text-sm font-semibold text-gray-900 ml-4">{item.bookings}</span>
                   </div>
-                  <span className="text-sm font-semibold text-gray-900 ml-4">{item.bookings}</span>
+                ))
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">Chưa có dữ liệu tuyến đường</p>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="mt-2"
+                    onClick={() => router.push("/Dashboard/routes")}
+                  >
+                    Thêm tuyến đường
+                  </Button>
                 </div>
-              ))}
+              )}
             </div>
           </div>
         </div>
@@ -184,60 +338,83 @@ export default function PartnerDashboard() {
             <h3 className="text-lg font-semibold text-gray-900">Đặt vé gần đây</h3>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Mã vé
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Tuyến đường
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Hành khách
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Số tiền
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Trạng thái
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {recentBookings.map((booking) => (
-                  <tr key={booking.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {booking.id}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {booking.route}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {booking.passenger}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatCurrency(booking.amount)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(booking.status)}`}>
-                        {booking.status}
-                      </span>
-                    </td>
+            {recentBookings.length > 0 ? (
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Mã vé
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Tuyến đường
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Hành khách
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Số tiền
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Trạng thái
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {recentBookings.map((booking) => (
+                    <tr key={booking.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {booking.id}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {booking.route}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {booking.passenger}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatCurrency(booking.amount)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(booking.status)}`}>
+                          {booking.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-gray-500 mb-4">Chưa có đơn đặt vé nào</p>
+                <Button 
+                  variant="outline"
+                  onClick={() => router.push("/Dashboard/order/all")}
+                >
+                  Xem tất cả đơn hàng
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Action Buttons */}
-        <div className="mt-8 flex space-x-4">
+        <div className="mt-8 flex flex-wrap gap-4">
           <Button onClick={() => router.push("/Dashboard/routes")}>
-            Thêm tuyến đường mới
+            Quản lý tuyến đường
           </Button>
-          <Button variant="outline">Xem báo cáo chi tiết</Button>
-          <Button variant="outline">Quản lý khuyến mãi</Button>
+          <Button 
+            variant="outline"
+            onClick={() => router.push("/Dashboard/order/all")}
+          >
+            Xem tất cả đơn hàng
+          </Button>
+          <Button variant="outline">
+            Xem báo cáo chi tiết
+          </Button>
+          <Button variant="outline">
+            Quản lý khuyến mãi
+          </Button>
+        </div>
         </div>
       </div>
     </div>

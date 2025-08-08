@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -39,7 +39,7 @@ interface BusRoute {
   totalSeats: number
 }
 
-export default function SearchPage() {
+function SearchPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   
@@ -559,5 +559,47 @@ export default function SearchPage() {
         </div>
       </section>
     </div>
+  )
+}
+
+// Loading component for Suspense fallback
+function SearchPageLoading() {
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <NavigationBar currentPage="home" />
+      <section className="bg-gradient-to-r from-blue-600 to-blue-800 text-white py-8">
+        <div className="container mx-auto px-4">
+          <div className="bg-white rounded-xl p-6 text-black shadow-lg">
+            <div className="animate-pulse">
+              <div className="grid gap-4 items-end grid-cols-1 md:grid-cols-2 lg:grid-cols-5">
+                <div className="h-12 bg-gray-200 rounded"></div>
+                <div className="h-12 bg-gray-200 rounded"></div>
+                <div className="h-12 bg-gray-200 rounded"></div>
+                <div className="h-12 bg-gray-200 rounded"></div>
+                <div className="h-12 bg-gray-200 rounded"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section className="py-8">
+        <div className="container mx-auto px-4">
+          <div className="flex justify-center items-center py-12">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-4 text-gray-600">Đang tải...</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense fallback={<SearchPageLoading />}>
+      <SearchPageContent />
+    </Suspense>
   )
 }
