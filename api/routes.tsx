@@ -129,3 +129,24 @@ export  const getRouteDataById = async (routeId: string, token?: string) => {
     throw new Error("Failed to fetch route data by ID");
   }
 };
+
+
+export const getPopularRoutes = async (token?: string) => {
+  try {
+    const headers: any = {
+      "Content-Type": "application/json",
+    };
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const response = await axios.get(`${API_URL}/popular-routes`, { headers });
+    console.log("Popular routes fetched successfully:", response.data);
+    return response.data;
+  } catch (error) {
+    console.error("Failed to fetch popular routes:", error);
+    throw new Error("Failed to fetch popular routes");
+  }
+};  
+

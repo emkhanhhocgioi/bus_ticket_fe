@@ -1,11 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import NavigationBar from "@/components/navigation/navigationbar"
 import vietnamProvinces from "@/constant/province"
+import { getPopularRoutes } from "@/api/routes"
 import { 
   Search, 
   ArrowLeftRight, 
@@ -18,8 +19,7 @@ import {
   MapPin,
   Clock,
   Shield,
-  Phone,
-  Users,
+
   Car,
   Plane,
   Train
@@ -27,18 +27,67 @@ import {
 
 import { useRouter } from "next/navigation"
 
+interface PopularRoute {
+  from: string;
+  to: string;
+  price: string;
+  originalPrice?: string;
+}
+
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState("bus")
   const [fromLocation, setFromLocation] = useState("")
   const [toLocation, setToLocation] = useState("")
   const [departureDate, setDepartureDate] = useState("")
+  const [popularRoutes, setPopularRoutes] = useState<PopularRoute[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const popularRoutes = [
-    { from: "Sài Gòn", to: "Đà Lạt", price: "199.000đ", originalPrice: "400.000đ" },
-    { from: "Sài Gòn", to: "Nha Trang", price: "200.000đ" },
-    { from: "Sài Gòn", to: "Phan Thiết", price: "160.000đ", originalPrice: "180.000đ" },
-    { from: "Nha Trang", to: "Sài Gòn", price: "200.000đ" },
-  ]
+  useEffect(() => {
+    const fetchPopularRoutes = async () => {
+      try {
+        setLoading(true)
+        const response = await getPopularRoutes()
+        
+        // Handle different possible response formats
+        let routesData = []
+        if (Array.isArray(response)) {
+          routesData = response
+        } else if (response && response.data && Array.isArray(response.data)) {
+          routesData = response.data
+        } else if (response && response.routes && Array.isArray(response.routes)) {
+          routesData = response.routes
+        }
+
+        // Transform the data to match our interface
+        const transformedRoutes = routesData.map((route: any) => ({
+          from: route.from || route.origin || route.departure || '',
+          to: route.to || route.destination || route.arrival || '',
+          price: route.price ? `${Number(route.price).toLocaleString('vi-VN')}đ` : route.formattedPrice || '0đ',
+          originalPrice: route.originalPrice ? `${Number(route.originalPrice).toLocaleString('vi-VN')}đ` : undefined
+        }))
+
+        setPopularRoutes(transformedRoutes.length > 0 ? transformedRoutes : [
+          { from: "Sài Gòn", to: "Đà Lạt", price: "199.000đ", originalPrice: "400.000đ" },
+          { from: "Sài Gòn", to: "Nha Trang", price: "200.000đ" },
+          { from: "Sài Gòn", to: "Phan Thiết", price: "160.000đ", originalPrice: "180.000đ" },
+          { from: "Nha Trang", to: "Sài Gòn", price: "200.000đ" },
+        ])
+      } catch (error) {
+        console.error("Failed to fetch popular routes:", error)
+        // Fallback data if API fails
+        setPopularRoutes([
+          { from: "Sài Gòn", to: "Đà Lạt", price: "199.000đ", originalPrice: "400.000đ" },
+          { from: "Sài Gòn", to: "Nha Trang", price: "200.000đ" },
+          { from: "Sài Gòn", to: "Phan Thiết", price: "160.000đ", originalPrice: "180.000đ" },
+          { from: "Nha Trang", to: "Sài Gòn", price: "200.000đ" },
+        ])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchPopularRoutes()
+  }, [])
 
   const promotions = [
     {
@@ -234,25 +283,41 @@ export default function HomePage() {
         </div>
       </section>
 
-          {/* Popular Routes */}
+      {/* Popular Routes */}
       <section className="py-16 bg-white">
         <div className="container mx-auto px-4">
           <h2 className="text-3xl font-bold text-center mb-12 text-gray-900">Tuyến đường phổ biến</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {popularRoutes.map((route, index) => (
-              <div key={index} className="border border-gray-200 rounded-xl p-6 hover:shadow-lg hover:border-blue-200 transition-all duration-300 cursor-pointer bg-white">
-                <div className="text-lg font-semibold mb-3 text-gray-900">
-                  {route.from} - {route.to}
+          
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {[...Array(4)].map((_, index) => (
+                <div key={index} className="border border-gray-200 rounded-xl p-6 animate-pulse">
+                  <div className="h-6 bg-gray-200 rounded mb-3"></div>
+                  <div className="h-8 bg-gray-200 rounded"></div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-2xl font-bold text-blue-600">Từ {route.price}</span>
-                  {route.originalPrice && (
-                    <span className="text-gray-500 line-through text-sm">{route.originalPrice}</span>
-                  )}
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {popularRoutes.map((route, index) => (
+                <div key={index} className="border border-gray-200 rounded-xl p-6 hover:shadow-lg hover:border-blue-200 transition-all duration-300 cursor-pointer bg-white">
+                  <div className="text-lg font-semibold mb-3 text-gray-900">
+                    {route.from} - {route.to}
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-2xl font-bold text-blue-600">
+                      {route.price.includes('đ') ? `Từ ${route.price}` : `Từ ${Number(route.price).toLocaleString('vi-VN')}đ`}
+                    </span>
+                    {route.originalPrice && (
+                      <span className="text-gray-500 line-through text-sm">
+                        {route.originalPrice.includes('đ') ? route.originalPrice : `${Number(route.originalPrice).toLocaleString('vi-VN')}đ`}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
