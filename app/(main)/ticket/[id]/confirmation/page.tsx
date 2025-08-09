@@ -7,22 +7,24 @@ import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import NavigationBar from "@/components/navigation/navigationbar"
 import { getRouteDataById } from "@/api/routes"
-import { createOrder, Order } from "@/api/order"
+import { 
+  createOrder, 
+  createVNpayment, 
+  handleVnpayReturn,
+  Order 
+} from "@/api/order"
 import { 
   CheckCircle, 
-  Calendar, 
-  Clock,
+
   MapPin,
   Car,
-  Users,
+
   Phone,
-  Mail,
+
   CreditCard,
   Download,
   Share,
   QrCode,
-  Star,
-  ArrowRight,
   AlertCircle,
   FileText,
   Lock,
@@ -30,7 +32,6 @@ import {
   User,
   CreditCard as CreditCardIcon,
   Banknote,
-  Smartphone,
   X,
   Check
 } from "lucide-react"
@@ -76,7 +77,7 @@ interface UserInfo {
 }
 
 interface PaymentMethod {
-  type: 'credit_card' | 'bank_transfer' | 'e_wallet' | 'cash'
+  type: 'cash' | 'vnpay'
   name: string
   icon: any
   description: string
@@ -84,22 +85,10 @@ interface PaymentMethod {
 
 const paymentMethods: PaymentMethod[] = [
   {
-    type: 'credit_card',
-    name: 'Thẻ tín dụng/Ghi nợ',
+    type: 'vnpay',
+    name: 'VNPay',
     icon: CreditCardIcon,
-    description: 'Visa, Mastercard, JCB'
-  },
-  {
-    type: 'bank_transfer',
-    name: 'Chuyển khoản ngân hàng',
-    icon: Banknote,
-    description: 'Vietcombank, VietinBank, BIDV'
-  },
-  {
-    type: 'e_wallet',
-    name: 'Ví điện tử',
-    icon: Smartphone,
-    description: 'MoMo, ZaloPay, ViettelPay'
+    description: 'Thanh toán qua VNPay - An toàn, nhanh chóng'
   },
   {
     type: 'cash',
@@ -130,13 +119,15 @@ export default function ConfirmationPage() {
     gender: 'male'
   })
   
-  const [selectedPayment, setSelectedPayment] = useState<PaymentMethod['type']>('credit_card')
-  const [cardInfo, setCardInfo] = useState({
-    cardNumber: '',
-    expiryDate: '',
-    cvv: '',
-    cardHolderName: ''
-  })
+  const [selectedPayment, setSelectedPayment] = useState<PaymentMethod['type']>('vnpay')
+  
+  const [selectedBank, setSelectedBank] = useState('')
+  const [paymentResult, setPaymentResult] = useState<{
+    success: boolean
+    message: string
+    orderId?: string
+  } | null>(null)
+  const [isCheckingPayment, setIsCheckingPayment] = useState(false)
 
   // Fetch route data
   useEffect(() => {
@@ -195,16 +186,67 @@ export default function ConfirmationPage() {
     }
   }, [routeId])
 
+  // Handle VNPay return
+  useEffect(() => {
+    const handleVNPayReturn = async () => {
+      // Check if this is a VNPay return by looking for VNPay parameters in URL
+      const urlParams = new URLSearchParams(window.location.search)
+      const vnpResponseCode = urlParams.get('vnp_ResponseCode')
+      const vnpTransactionStatus = urlParams.get('vnp_TransactionStatus')
+      const vnpOrderInfo = urlParams.get('vnp_OrderInfo')
+      
+      if (vnpResponseCode !== null) {
+        setIsCheckingPayment(true)
+        
+        try {
+          // Convert URLSearchParams to plain object
+          const params: Record<string, string> = {}
+          urlParams.forEach((value, key) => {
+            params[key] = value
+          })
+          
+          const result = await handleVnpayReturn(params)
+          
+          if (result.success) {
+            setPaymentResult({
+              success: true,
+              message: result.message || 'Thanh toán thành công!',
+              orderId: result.orderId
+            })
+            setShowSuccessModal(true)
+          } else {
+            setPaymentResult({
+              success: false,
+              message: result.message || 'Thanh toán thất bại!'
+            })
+            setSubmitError(result.message || 'Thanh toán thất bại!')
+          }
+        } catch (error: any) {
+          console.error('Error handling VNPay return:', error)
+          setPaymentResult({
+            success: false,
+            message: 'Có lỗi xảy ra khi xử lý kết quả thanh toán'
+          })
+          setSubmitError('Có lỗi xảy ra khi xử lý kết quả thanh toán')
+        } finally {
+          setIsCheckingPayment(false)
+          
+          // Clean URL by removing VNPay parameters
+          const cleanUrl = window.location.pathname
+          window.history.replaceState({}, document.title, cleanUrl)
+        }
+      }
+    }
+
+    handleVNPayReturn()
+  }, [])
+
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('vi-VN').format(price) + 'đ'
   }
 
   const handleUserInfoChange = (field: keyof UserInfo, value: string) => {
     setUserInfo(prev => ({ ...prev, [field]: value }))
-  }
-
-  const handleCardInfoChange = (field: string, value: string) => {
-    setCardInfo(prev => ({ ...prev, [field]: value }))
   }
 
   const validateForm = () => {
@@ -240,10 +282,49 @@ export default function ConfirmationPage() {
         orderStatus: 'pending'
       }
 
-      // Create order
+      // Create order first
       const response = await createOrder(orderData, token || undefined)
-      setOrderResponse(response)
-      setShowSuccessModal(true)
+      
+      console.log(response.data)
+
+      const orderId = response.data.orderId
+
+      // Handle payment based on selected method
+      switch (selectedPayment) {
+        case 'vnpay': {
+          const orderInfo = `Thanh toán vé xe ${route.route.from} - ${route.route.to} - ${userInfo.fullName}`
+          const bankCode = selectedBank || 'VNPAYQR'
+          
+          try {
+            const vnpayResponse = await createVNpayment(
+              orderId,
+              route.pricing.total,
+              orderInfo,
+              bankCode,
+              'vn',
+              token || ''
+            )
+            
+            if (vnpayResponse?.data.paymentUrl) {
+              window.location.href = vnpayResponse.data.paymentUrl
+              return
+            } else {
+              console.log(vnpayResponse.data.paymentUrl)
+            }
+          } catch (vnpayError: any) {
+            console.error('VNPay payment error:', vnpayError)
+            throw new Error('Có lỗi xảy ra khi tạo thanh toán VNPay. Vui lòng thử lại.')
+          }
+        }
+        
+        case 'cash':
+        default: {
+          // For cash payment, just show success modal
+          setOrderResponse(response)
+          setShowSuccessModal(true)
+          break
+        }
+      }
     } catch (error: any) {
       console.error('Booking error:', error)
       const errorMessage = error.response?.data?.message || error.message || 'Có lỗi xảy ra khi đặt vé. Vui lòng thử lại.'
@@ -279,7 +360,9 @@ export default function ConfirmationPage() {
               <div className="flex justify-between">
                 <span className="text-gray-600">Mã vé:</span>
                 <span className="font-mono font-semibold text-blue-600">
-                  {orderResponse?.order?._id?.slice(-8).toUpperCase() || `BT${Date.now().toString().slice(-6)}`}
+                  {paymentResult?.orderId?.slice(-8).toUpperCase() || 
+                   orderResponse?.order?._id?.slice(-8).toUpperCase() || 
+                   `BT${Date.now().toString().slice(-6)}`}
                 </span>
               </div>
               <div className="flex justify-between">
@@ -316,14 +399,19 @@ export default function ConfirmationPage() {
           </div>
 
           {/* Success Message */}
-          {orderResponse?.success && (
+          {(orderResponse?.success || paymentResult?.success) && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
               <div className="flex items-center">
                 <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
                 <p className="text-green-800 font-medium">
-                  {orderResponse.message || 'Đặt vé thành công!'}
+                  {paymentResult?.message || orderResponse?.message || 'Đặt vé thành công!'}
                 </p>
               </div>
+              {paymentResult?.success && (
+                <p className="text-green-700 text-sm mt-2">
+                  Thanh toán VNPay đã được xử lý thành công.
+                </p>
+              )}
             </div>
           )}
 
@@ -391,6 +479,57 @@ export default function ConfirmationPage() {
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
             <p className="mt-4 text-gray-600">Đang tải thông tin chuyến xe...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show payment checking screen
+  if (isCheckingPayment) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <NavigationBar currentPage="order" />
+        <div className="flex justify-center items-center py-20">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Đang xử lý kết quả thanh toán...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show payment result if there's an error
+  if (paymentResult && !paymentResult.success) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <NavigationBar currentPage="order" />
+        <div className="flex justify-center items-center py-20">
+          <div className="text-center max-w-md mx-auto">
+            <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Thanh toán thất bại
+            </h3>
+            <p className="text-gray-600 mb-4">{paymentResult.message}</p>
+            <div className="space-y-2">
+              <Button 
+                onClick={() => {
+                  setPaymentResult(null)
+                  setSubmitError('')
+                }}
+                className="w-full"
+              >
+                Thử lại
+              </Button>
+              <Button 
+                variant="outline"
+                onClick={() => router.push('/home')}
+                className="w-full"
+              >
+                Về trang chủ
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -587,57 +726,84 @@ export default function ConfirmationPage() {
                   })}
                 </div>
 
-                {/* Credit Card Form */}
-                {selectedPayment === 'credit_card' && (
-                  <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
-                    <h4 className="font-medium text-gray-900">Thông tin thẻ</h4>
-                    <div className="grid grid-cols-1 gap-4">
-                      <div>
-                        <Label htmlFor="cardNumber">Số thẻ</Label>
-                        <Input
-                          id="cardNumber"
-                          type="text"
-                          value={cardInfo.cardNumber}
-                          onChange={(e) => handleCardInfoChange('cardNumber', e.target.value)}
-                          placeholder="1234 5678 9012 3456"
-                          className="mt-1"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label htmlFor="expiryDate">MM/YY</Label>
-                          <Input
-                            id="expiryDate"
-                            type="text"
-                            value={cardInfo.expiryDate}
-                            onChange={(e) => handleCardInfoChange('expiryDate', e.target.value)}
-                            placeholder="12/25"
-                            className="mt-1"
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="cvv">CVV</Label>
-                          <Input
-                            id="cvv"
-                            type="text"
-                            value={cardInfo.cvv}
-                            onChange={(e) => handleCardInfoChange('cvv', e.target.value)}
-                            placeholder="123"
-                            className="mt-1"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <Label htmlFor="cardHolderName">Tên chủ thẻ</Label>
-                        <Input
-                          id="cardHolderName"
-                          type="text"
-                          value={cardInfo.cardHolderName}
-                          onChange={(e) => handleCardInfoChange('cardHolderName', e.target.value)}
-                          placeholder="NGUYEN VAN A"
-                          className="mt-1"
-                        />
-                      </div>
+                {/* VNPay Bank Selection */}
+                {selectedPayment === 'vnpay' && (
+                  <div className="space-y-4 p-4 bg-blue-50 rounded-lg">
+                    <h4 className="font-medium text-gray-900">Chọn ngân hàng (tùy chọn)</h4>
+                    <p className="text-sm text-gray-600">Bạn có thể chọn ngân hàng để thanh toán nhanh hơn, hoặc để trống để sử dụng QR code</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBank('VNBANK')}
+                        className={`p-3 border rounded-lg text-left transition-all ${
+                          selectedBank === 'VNBANK' 
+                            ? 'border-blue-500 bg-blue-100' 
+                            : 'border-gray-300 hover:border-gray-400'
+                        }`}
+                      >
+                        <div className="font-medium">VietinBank</div>
+                        <div className="text-sm text-gray-600">Ngân hàng TMCP Công Thương</div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBank('VIETCOMBANK')}
+                        className={`p-3 border rounded-lg text-left transition-all ${
+                          selectedBank === 'VIETCOMBANK' 
+                            ? 'border-blue-500 bg-blue-100' 
+                            : 'border-gray-300 hover:border-gray-400'
+                        }`}
+                      >
+                        <div className="font-medium">Vietcombank</div>
+                        <div className="text-sm text-gray-600">Ngân hàng TMCP Ngoại Thương</div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBank('BIDV')}
+                        className={`p-3 border rounded-lg text-left transition-all ${
+                          selectedBank === 'BIDV' 
+                            ? 'border-blue-500 bg-blue-100' 
+                            : 'border-gray-300 hover:border-gray-400'
+                        }`}
+                      >
+                        <div className="font-medium">BIDV</div>
+                        <div className="text-sm text-gray-600">Ngân hàng TMCP Đầu tư và Phát triển</div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBank('AGRIBANK')}
+                        className={`p-3 border rounded-lg text-left transition-all ${
+                          selectedBank === 'AGRIBANK' 
+                            ? 'border-blue-500 bg-blue-100' 
+                            : 'border-gray-300 hover:border-gray-400'
+                        }`}
+                      >
+                        <div className="font-medium">Agribank</div>
+                        <div className="text-sm text-gray-600">Ngân hàng Nông nghiệp và Phát triển</div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBank('TECHCOMBANK')}
+                        className={`p-3 border rounded-lg text-left transition-all ${
+                          selectedBank === 'TECHCOMBANK' 
+                            ? 'border-blue-500 bg-blue-100' 
+                            : 'border-gray-300 hover:border-gray-400'
+                        }`}
+                      >
+                        <div className="font-medium">Techcombank</div>
+                        <div className="text-sm text-gray-600">Ngân hàng TMCP Kỹ Thương</div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBank('')}
+                        className={`p-3 border rounded-lg text-left transition-all ${
+                          selectedBank === '' 
+                            ? 'border-blue-500 bg-blue-100' 
+                            : 'border-gray-300 hover:border-gray-400'
+                        }`}
+                      >
+                        <div className="font-medium">QR Code</div>
+                        <div className="text-sm text-gray-600">Quét mã QR để thanh toán</div>
+                      </button>
                     </div>
                   </div>
                 )}
@@ -715,7 +881,7 @@ export default function ConfirmationPage() {
                   ) : (
                     <>
                       <Lock className="w-5 h-5 mr-2" />
-                      Thanh toán và đặt vé
+                      {selectedPayment === 'vnpay' ? 'Thanh toán VNPay' : 'Thanh toán và đặt vé'}
                     </>
                   )}
                 </Button>
