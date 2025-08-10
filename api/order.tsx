@@ -105,7 +105,7 @@ export const acceptOrder = async (orderId: string, token: string) => {
 };
 export const rejectOrder = async (orderId: string, token: string) => {
   try {
-    const response = await axios.put(`${API_URL}/order/reject/${orderId}`, {}, {
+    const response = await axios.put(`${API_URL}/order/decline/${orderId}`, {}, {
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${token}`,
@@ -165,92 +165,36 @@ export const createVNpayment = async (
   }
 };
 
-// API cho thanh toán thẻ tín dụng
-export const createCreditCardPayment = async (
+export const createVnpayqrcode = async (
   orderId: string,
   amount: number,
-  cardInfo: {
-    cardNumber: string;
-    expiryDate: string;
-    cvv: string;
-    cardHolderName: string;
-  },
+  orderInfo: string,
+  bankCode: string,
+  locale: string = 'vn',
+  expiryMinutes: number = 15,
   token: string
 ) => {
   try {
     const body = {
       orderId,
       amount,
-      cardInfo,
-      paymentMethod: 'credit_card'
+      orderInfo,
+      bankCode,
+      locale,
+      expiryMinutes,
     };
-    const response = await axios.post(`${API_URL}/payment/credit-card`, body, {
+    const response = await axios.post(`${API_URL}/payment/qr/create`, body, {
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${token}`,
       },
     });
+    console.log("VNPay QR code created successfully:", response.data);
     return response.data;
+    
   } catch (error: any) {
-    console.error("Failed to create credit card payment:", error);
-    throw new Error("Failed to create credit card payment");
-  }
-};
-
-// API cho chuyển khoản ngân hàng
-export const createBankTransferPayment = async (
-  orderId: string,
-  amount: number,
-  bankInfo: {
-    bankCode: string;
-    accountNumber?: string;
-  },
-  token: string
-) => {
-  try {
-    const body = {
-      orderId,
-      amount,
-      bankInfo,
-      paymentMethod: 'bank_transfer'
-    };
-    const response = await axios.post(`${API_URL}/payment/bank-transfer`, body, {
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
-      },
-    });
-    return response.data;
-  } catch (error: any) {
-    console.error("Failed to create bank transfer payment:", error);
-    throw new Error("Failed to create bank transfer payment");
-  }
-};
-
-// API cho ví điện tử
-export const createEWalletPayment = async (
-  orderId: string,
-  amount: number,
-  walletType: string,
-  token: string
-) => {
-  try {
-    const body = {
-      orderId,
-      amount,
-      walletType,
-      paymentMethod: 'e_wallet'
-    };
-    const response = await axios.post(`${API_URL}/payment/e-wallet`, body, {
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
-      },
-    });
-    return response.data;
-  } catch (error: any) {
-    console.error("Failed to create e-wallet payment:", error);
-    throw new Error("Failed to create e-wallet payment");
+    console.error("Failed to create VNPay QR code:", error);
+    throw new Error("Failed to create VNPay QR code");
   }
 };
 
@@ -269,3 +213,5 @@ export const handleVnpayReturn = async (params: Record<string, string>) => {
     throw new Error("Failed to handle VNPay return");
   }
 };
+
+
