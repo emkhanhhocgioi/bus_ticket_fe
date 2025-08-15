@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { getOrderByRouteId, Order, acceptOrder,rejectOrder } from "@/api/order";
+import { getOrderByRouteId, Order, acceptOrder,rejectOrder, checkoutOrder } from "@/api/order";
 import { getRoutes, Route } from "@/api/routes";
+import { useWebSocket, useWebSocketHelpers } from '@/context/WebSocketContext';
 import {
   Table,
   TableBody,
@@ -22,6 +23,9 @@ interface OrderWithRoute extends Order {
 }
 
 export default function OrderListPage() {
+
+   const { isConnected, messages } = useWebSocket();
+  const { sendBookingNotification } = useWebSocketHelpers();
   const { user, token } = useAuth();
   const [orders, setOrders] = useState<OrderWithRoute[]>([]);
   const [routes, setRoutes] = useState<Route[]>([]);
@@ -149,6 +153,8 @@ export default function OrderListPage() {
         return "bg-yellow-100 text-yellow-800";
       case "completed":
         return "bg-blue-100 text-blue-800";
+      case "finished":
+        return "bg-purple-100 text-purple-800";
       case "cancelled":
         return "bg-red-100 text-red-800";
       default:
@@ -164,6 +170,8 @@ export default function OrderListPage() {
         return "Pending";
       case "completed":
         return "Completed";
+      case "finished":
+        return "Finished";
       case "cancelled":
         return "Cancelled";
       default:
@@ -234,13 +242,22 @@ export default function OrderListPage() {
     fetchOrders();
   };
 
-  const handleBookingAction = async (orderId: string, action: 'accept' | 'reject') => {
+  const handleBookingAction = async (orderId: string, toid: string, bussinessId: string, action: 'accept' | 'reject') => {
     if (!token) return;
     
     setActionLoading(true);
     try {
       if (action === 'accept') {
         await acceptOrder(orderId, token);
+        
+        const notificationdata = {
+        userId: user?.id,
+        fromId: toid,
+        content: `Nhà xe ${bussinessId} đã xác nhận đơn đặt xe của bạn`,
+      }
+
+        sendBookingNotification(notificationdata)
+
         setToast({
           type: "success",
           title: "Booking Confirmed",
@@ -249,6 +266,14 @@ export default function OrderListPage() {
         });
       } else {
         await rejectOrder(orderId, token);
+
+        const notificationdata = {
+        userId: user?.id,
+        fromId: toid,
+        content: `Nhà xe ${bussinessId} đã từ chối đơn đặt xe của bạn`,
+      }
+
+        sendBookingNotification(notificationdata)
         setToast({
           type: "success",
           title: "Booking Rejected",
@@ -264,6 +289,34 @@ export default function OrderListPage() {
       setToast({
         type: "error",
         title: `Failed to ${action === 'accept' ? 'confirm' : 'reject'} booking`,
+        message: "Please try again.",
+        isVisible: true,
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCheckoutOrder = async (routeId: string) => {
+    if (!token) return;
+    
+    setActionLoading(true);
+    try {
+      const result = await checkoutOrder(routeId, token);
+      setToast({
+        type: "success",
+        title: "Checkout Successful",
+        message: "Order has been checked out successfully.",
+        isVisible: true,
+      });
+      
+      // Refresh orders after successful checkout
+      refreshOrders();
+    } catch (error) {
+      console.error("Failed to checkout order:", error);
+      setToast({
+        type: "error",
+        title: "Checkout Failed",
         message: "Please try again.",
         isVisible: true,
       });
@@ -443,7 +496,7 @@ export default function OrderListPage() {
                           <>
                             <Button
                               size="sm"
-                              onClick={() => handleBookingAction(order._id!, 'accept')}
+                              onClick={() => handleBookingAction(order._id!,order.userId!,order.bussinessId!, 'accept')}
                               disabled={actionLoading}
                               className="bg-green-600 hover:bg-green-700 text-white"
                             >
@@ -452,12 +505,22 @@ export default function OrderListPage() {
                             <Button
                               size="sm"
                               variant="destructive"
-                              onClick={() => handleBookingAction(order._id!, 'reject')}
+                              onClick={() => handleBookingAction(order._id!,order.userId!,order.bussinessId!, 'reject')}
                               disabled={actionLoading}
                             >
                               Reject
                             </Button>
                           </>
+                        )}
+                        {order.orderStatus?.toLowerCase() === 'confirmed' && (
+                          <Button
+                            size="sm"
+                            onClick={() => handleCheckoutOrder(order.routeId)}
+                            disabled={actionLoading}
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                          >
+                            Checkout
+                          </Button>
                         )}
                       </div>
                     </TableCell>

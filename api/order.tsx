@@ -214,4 +214,22 @@ export const handleVnpayReturn = async (params: Record<string, string>) => {
   }
 };
 
+export const checkoutOrder = async (routeId: string, token?: string) => {
+  try {
+    const headers: any = {
+      "Content-Type": "application/json",
+    };
+    
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const response = await axios.put(`${API_URL}/checkout/order/${routeId}`, { headers });
+    return response.data;
+  } catch (error: any) {
+    console.error("Failed to checkout order:", error);
+    throw new Error("Failed to checkout order");
+  }
+};
+
 

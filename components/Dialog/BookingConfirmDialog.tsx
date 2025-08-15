@@ -21,7 +21,7 @@ interface BookingConfirmDialogProps {
   isOpen: boolean;
   onClose: () => void;
   order: OrderWithRoute | null;
-  onConfirm: (orderId: string, action: 'accept' | 'reject') => Promise<void>;
+  onConfirm: (orderId: string, userId: string, bussinessId: string, action: 'accept' | 'reject') => Promise<void>;
   loading?: boolean;
 }
 
@@ -56,7 +56,7 @@ export default function BookingConfirmDialog({
     
     setActionLoading(action);
     try {
-      await onConfirm(order._id, action);
+      await onConfirm(order._id, order.userId!, order.bussinessId!, action);
       onClose();
     } catch (error) {
       console.error(`Failed to ${action} order:`, error);

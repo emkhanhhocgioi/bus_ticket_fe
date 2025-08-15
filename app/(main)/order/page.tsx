@@ -4,8 +4,15 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import NavigationBar from "@/components/navigation/navigationbar"
-import { getOrderByUserId, searchOrdersByPhoneOrId } from "@/api/order"
+import { 
+  getOrderByUserId, 
+  searchOrdersByPhoneOrId,
+  createVNpayment,
+  handleVnpayReturn
+} from "@/api/order"
 import { useAuth } from "@/context/AuthContext"
+import ReviewDialog from "@/components/Dialog/ReviewDialog"
+
 import { 
   Search, 
   Filter,
@@ -21,11 +28,19 @@ import {
   Eye,
   Download,
   RefreshCw,
-  Loader2
+  Loader2,
+  X,
+  Banknote,
+  CreditCard,
+  FileText,
+  Share,
+  User,
+  Bus
 } from "lucide-react"
 
 interface BookingData {
   id: string;
+  routeId: string | { _id: string }; // Thêm routeId cho ReviewDialog - có thể là string hoặc object với _id
   route: string;
   from: string;
   to: string;
@@ -57,11 +72,40 @@ export default function OrderPage() {
   
   const { user, token, isLoggedIn } = useAuth()
 
-  // Function to handle order details view
+  // Payment states
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [paymentResult, setPaymentResult] = useState<{
+    success: boolean
+    message: string
+    orderId?: string
+  } | null>(null)
+  const [isCheckingPayment, setIsCheckingPayment] = useState(false)
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<BookingData | null>(null)
+
+  // Helper function to get routeId as string
+  const getRouteIdString = (routeId: string | { _id: string }): string => {
+    return typeof routeId === 'string' ? routeId : routeId._id;
+  }
+
+  // Payment helper functions
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('vi-VN').format(price) + 'đ'
+  }
+
+
   const handleOrderDetails = (booking: BookingData) => {
-    // Navigate to order details page or show modal
+
     console.log('Viewing order details for:', booking.id)
-    // You can implement navigation to order details page here
+
+  }
+
+  // Function to handle refresh after review submitted
+  const handleReviewSubmitted = () => {
+    console.log('Review submitted, refreshing order list...');
+    if (isLoggedIn && user?.id && token) {
+      fetchOrders();
+    }
   }
 
   // Fetch orders from API
@@ -83,6 +127,7 @@ export default function OrderPage() {
       // Transform API response to match the expected format
       const transformedOrders = (response?.data || response || []).map((order: any) => ({
         id: order._id || order.id || `ORDER_${Date.now()}_${Math.random()}`,
+        routeId: order.routeId?._id || order.routeId || order.routeInfo?._id || order.route || "unknown", // Thêm routeId
         route: `${order.routeId?.from || order.routeInfo?.from || 'N/A'} - ${order.routeId?.to || order.routeInfo?.to || 'N/A'}`,
         from: order.routeId?.from || order.routeInfo?.from || 'N/A',
         to: order.routeId?.to || order.routeInfo?.to || 'N/A',
@@ -134,6 +179,7 @@ export default function OrderPage() {
       const ordersArray = response?.data || response || []
       const transformedOrders = ordersArray.map((order: any) => ({
         id: order._id || `ORDER_${Date.now()}_${Math.random()}`,
+        routeId: order.routeId?._id || order.routeId || order.routeInfo?._id || order.route || "unknown", // Thêm routeId
         route: `${order.routeId?.from || order.routeInfo?.from || 'N/A'} - ${order.routeId?.to || order.routeInfo?.to || 'N/A'}`,
         from: order.routeId?.from || order.routeInfo?.from || 'N/A',
         to: order.routeId?.to || order.routeInfo?.to || 'N/A',
@@ -177,6 +223,68 @@ export default function OrderPage() {
     setError(null)
   }
 
+  // Payment handlers
+  const handlePayment = async (booking: BookingData) => {
+    setSelectedOrderForPayment(booking)
+    setIsSubmitting(true)
+    
+    try {
+      const priceNumber = parseInt(booking.price.replace(/[đ.,]/g, ''))
+      const orderInfo = `Thanh toán vé xe ${booking.from} - ${booking.to} - ${booking.passengerName}`
+      
+      // Use standard VNPay payment
+      const vnpayResponse = await createVNpayment(
+        booking.id,
+        priceNumber,
+        orderInfo,
+        '', // No specific bank code
+        'vn',
+        token || ''
+      )
+      
+      if (vnpayResponse?.data.paymentUrl) {
+        window.location.href = vnpayResponse.data.paymentUrl
+      } else {
+        throw new Error('Không thể tạo liên kết thanh toán')
+      }
+    } catch (error: any) {
+      console.error('Payment error:', error)
+      setError(error.message || 'Có lỗi xảy ra khi tạo thanh toán')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handlePaymentWithBank = async (booking: BookingData, bankCode: string) => {
+    setSelectedOrderForPayment(booking)
+    setIsSubmitting(true)
+    
+    try {
+      const priceNumber = parseInt(booking.price.replace(/[đ.,]/g, ''))
+      const orderInfo = `Thanh toán vé xe ${booking.from} - ${booking.to} - ${booking.passengerName}`
+      
+      const vnpayResponse = await createVNpayment(
+        booking.id,
+        priceNumber,
+        orderInfo,
+        bankCode,
+        'vn',
+        token || ''
+      )
+      
+      if (vnpayResponse?.data.paymentUrl) {
+        window.location.href = vnpayResponse.data.paymentUrl
+      } else {
+        throw new Error('Không thể tạo liên kết thanh toán')
+      }
+    } catch (error: any) {
+      console.error('Payment error:', error)
+      setError(error.message || 'Có lỗi xảy ra khi tạo thanh toán')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   useEffect(() => {
     if (isLoggedIn && user?.id && token) {
       fetchOrders()
@@ -184,6 +292,55 @@ export default function OrderPage() {
       setLoading(false)
     }
   }, [user?.id, token, isLoggedIn])
+
+  // Handle VNPay return
+  useEffect(() => {
+    const handleVNPayReturn = async () => {
+      const urlParams = new URLSearchParams(window.location.search)
+      const vnpResponseCode = urlParams.get('vnp_ResponseCode')
+      
+      if (vnpResponseCode !== null) {
+        setIsCheckingPayment(true)
+        
+        try {
+          const params: Record<string, string> = {}
+          urlParams.forEach((value, key) => {
+            params[key] = value
+          })
+          
+          const result = await handleVnpayReturn(params)
+          
+          if (result.success) {
+            setPaymentResult({
+              success: true,
+              message: result.message || 'Thanh toán thành công!',
+              orderId: result.orderId
+            })
+            setShowSuccessModal(true)
+            fetchOrders() // Refresh orders after successful payment
+          } else {
+            setPaymentResult({
+              success: false,
+              message: result.message || 'Thanh toán thất bại!'
+            })
+          }
+        } catch (error: any) {
+          console.error('Error handling VNPay return:', error)
+          setPaymentResult({
+            success: false,
+            message: 'Có lỗi xảy ra khi xử lý kết quả thanh toán'
+          })
+        } finally {
+          setIsCheckingPayment(false)
+          
+          const cleanUrl = window.location.pathname
+          window.history.replaceState({}, document.title, cleanUrl)
+        }
+      }
+    }
+
+    handleVNPayReturn()
+  }, [])
 
   // Sample booking data (removed from here)
   // const bookings = [...]
@@ -196,6 +353,8 @@ export default function OrderPage() {
         return "text-yellow-600 bg-yellow-50 border-yellow-200"
       case "completed":
         return "text-blue-600 bg-blue-50 border-blue-200"
+      case "finished":
+        return "text-purple-600 bg-purple-50 border-purple-200"
       case "cancelled":
         return "text-red-600 bg-red-50 border-red-200"
       default:
@@ -211,6 +370,8 @@ export default function OrderPage() {
         return <AlertCircle className="w-4 h-4" />
       case "completed":
         return <CheckCircle className="w-4 h-4" />
+      case "finished":
+        return <Star className="w-4 h-4" />
       case "cancelled":
         return <XCircle className="w-4 h-4" />
       default:
@@ -226,6 +387,8 @@ export default function OrderPage() {
         return "Chờ xác nhận"
       case "completed":
         return "Hoàn thành"
+      case "finished":
+        return "Đã kết thúc"
       case "cancelled":
         return "Đã hủy"
       default:
@@ -297,6 +460,7 @@ export default function OrderPage() {
                   <option value="confirmed">Đã xác nhận</option>
                   <option value="pending">Chờ xác nhận</option>
                   <option value="completed">Hoàn thành</option>
+                  <option value="finished">Đã kết thúc</option>
                   <option value="cancelled">Đã hủy</option>
                 </select>
               </div>
@@ -334,7 +498,7 @@ export default function OrderPage() {
 
         {/* Stats Cards - Only show when logged in or have results */}
         {(isLoggedIn || (isGuestLookup && bookings.length > 0)) && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
             <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
               <div className="flex items-center justify-between">
                 <div>
@@ -371,6 +535,20 @@ export default function OrderPage() {
                 </div>
                 <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                   <CheckCircle className="w-6 h-6 text-blue-600" />
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Đã kết thúc</p>
+                  <p className="text-2xl font-bold text-purple-600">
+                    {bookings.filter(b => b.status === 'finished').length}
+                  </p>
+                </div>
+                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                  <Star className="w-6 h-6 text-purple-600" />
                 </div>
               </div>
             </div>
@@ -566,6 +744,7 @@ export default function OrderPage() {
                             <p className="text-sm text-gray-600">Thanh toán</p>
                             <p className="text-sm font-medium">{booking.paymentMethod}</p>
                           </div>
+                        
                         </div>
                         
                         <div className="flex items-center space-x-2">
@@ -581,9 +760,35 @@ export default function OrderPage() {
                             <Download className="w-4 h-4 mr-1" />
                             Tải hóa đơn
                           </Button>
-                          {isLoggedIn && booking.status === 'confirmed' && (
-                            <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50">
-                              Hủy đơn
+                          {booking.status === 'finished' && (
+                            <ReviewDialog 
+                              routeId={getRouteIdString(booking.routeId)}
+                              onReviewSubmitted={handleReviewSubmitted}
+                            >
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="text-purple-600 border-purple-200 hover:bg-purple-50"
+                              >
+                                <Star className="w-4 h-4 mr-1" />
+                                Đánh giá
+                              </Button>
+                            </ReviewDialog>
+                          )}
+                          {booking.status === 'confirmed' && (booking.paymentMethod === 'Tiền mặt' || booking.paymentMethod === 'cash') && (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                              onClick={() => handlePayment(booking)}
+                              disabled={isSubmitting}
+                            >
+                              {isSubmitting && selectedOrderForPayment?.id === booking.id ? (
+                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                              ) : (
+                                <CreditCard className="w-4 h-4 mr-1" />
+                              )}
+                              Thanh toán
                             </Button>
                           )}
                         </div>
@@ -721,7 +926,38 @@ export default function OrderPage() {
                         <Download className="w-4 h-4 mr-1" />
                         Tải hóa đơn
                       </Button>
-                      {isLoggedIn && booking.status === 'confirmed' && (
+                      {booking.status === 'finished' && (
+                        <ReviewDialog 
+                          routeId={getRouteIdString(booking.routeId)}
+                          onReviewSubmitted={handleReviewSubmitted}
+                        >
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-purple-600 border-purple-200 hover:bg-purple-50"
+                          >
+                            <Star className="w-4 h-4 mr-1" />
+                            Đánh giá
+                          </Button>
+                        </ReviewDialog>
+                      )}
+                      {booking.status === 'confirmed' && (booking.paymentMethod === 'Tiền mặt' || booking.paymentMethod === 'cash') && (
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                          onClick={() => handlePayment(booking)}
+                          disabled={isSubmitting}
+                        >
+                          {isSubmitting && selectedOrderForPayment?.id === booking.id ? (
+                            <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                          ) : (
+                            <CreditCard className="w-4 h-4 mr-1" />
+                          )}
+                          Thanh toán
+                        </Button>
+                      )}
+                      {booking.status === 'confirmed' && booking.paymentMethod !== 'Tiền mặt' && booking.paymentMethod !== 'cash' && (
                         <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50">
                           Hủy đơn
                         </Button>
@@ -799,6 +1035,105 @@ export default function OrderPage() {
           </div>
         </div>
       </footer>
+
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-t-2xl">
+              <div className="text-center">
+                <div className="w-20 h-20 bg-green-400 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle className="w-12 h-12 text-white" />
+                </div>
+                <h2 className="text-2xl font-bold mb-2">Thanh toán thành công!</h2>
+                <p className="text-green-100">Cảm ơn bạn đã sử dụng dịch vụ của chúng tôi</p>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6">
+              {/* Success Message */}
+              {paymentResult?.success && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                  <div className="flex items-center">
+                    <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
+                    <span className="text-green-800 font-medium">
+                      {paymentResult.message}
+                    </span>
+                  </div>
+                  <p className="text-green-700 text-sm mt-2">
+                    Thanh toán VNPay đã được xử lý thành công.
+                  </p>
+                </div>
+              )}
+
+              {/* Instructions */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <h4 className="font-medium text-blue-900 mb-2">Thông tin quan trọng</h4>
+                <ul className="text-sm text-blue-800 space-y-1">
+                  <li>• Vé của bạn đã được thanh toán</li>
+                  <li>• Trạng thái đơn hàng sẽ được cập nhật</li>
+                  <li>• Đến bến xe trước 15 phút</li>
+                  <li>• Mang theo giấy tờ tùy thân</li>
+                </ul>
+              </div>
+
+              {/* Actions */}
+              <div className="space-y-3">
+                <Button 
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  onClick={() => {
+                    setShowSuccessModal(false)
+                    setPaymentResult(null)
+                    setSelectedOrderForPayment(null)
+                    fetchOrders() // Refresh orders
+                  }}
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Làm mới danh sách
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={() => {
+                    setShowSuccessModal(false)
+                    setPaymentResult(null)
+                    setSelectedOrderForPayment(null)
+                  }}
+                >
+                  Đóng
+                </Button>
+              </div>
+            </div>
+
+            {/* Close Button */}
+            <button
+              onClick={() => {
+                setShowSuccessModal(false)
+                setPaymentResult(null)
+                setSelectedOrderForPayment(null)
+              }}
+              className="absolute top-4 right-4 text-white hover:text-gray-200"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Payment checking screen */}
+      {isCheckingPayment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 text-center max-w-md w-full">
+            <Loader2 className="w-16 h-16 text-blue-500 mx-auto mb-4 animate-spin" />
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Đang xử lý kết quả thanh toán...
+            </h3>
+            <p className="text-gray-600">Vui lòng đợi trong giây lát</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

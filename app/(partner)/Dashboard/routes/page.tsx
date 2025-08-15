@@ -25,6 +25,7 @@ import { Plus, Edit, Trash2, MapPin, Clock, DollarSign, Users } from "lucide-rea
 import { useAuth } from "@/context/AuthContext";
 import { Toast, useToast } from "@/components/ui/toast";
 import {createRoute, getRoutes, updateRoute, deleteRoute} from "@/api/routes";
+import { checkoutOrder } from "@/api/order";
 
 
 // Mock data interface
@@ -369,6 +370,27 @@ export default function RouteManagement() {
     router.push(`/Dashboard/order/${routeId}`);
   };
 
+  const handleCheckoutRoute = async (routeId: string) => {
+    if (!token) {
+      showToast("error", "Lỗi", "Bạn cần đăng nhập để thực hiện thao tác này");
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      const result = await checkoutOrder(routeId, token);
+      showToast("success", "Thành công", "Đã checkout tuyến đường thành công");
+      
+      // Refresh routes after successful checkout
+      await fetchRoutes();
+    } catch (error) {
+      console.error("Failed to checkout route:", error);
+      showToast("error", "Lỗi", "Có lỗi xảy ra khi checkout tuyến đường");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="container mx-auto p-6">
       <div className="flex justify-between items-center mb-6">
@@ -692,6 +714,18 @@ export default function RouteManagement() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end space-x-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCheckoutRoute(route._id);
+                          }}
+                          className="bg-blue-600 hover:bg-blue-700 text-white"
+                          disabled={loading}
+                        >
+                          Checkout
+                        </Button>
                         <Button
                           size="sm"
                           variant="outline"

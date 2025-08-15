@@ -17,10 +17,13 @@ import {
   Car,
   Users,
   CheckCircle,
-  ArrowLeftRight
+  ArrowLeftRight,
+  MessageCircle
 } from "lucide-react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { searchRoutes } from "@/api/routes"
+import { getRouteReviews } from "@/api/review"
+import ViewReviewsDialog from "@/components/Dialog/ViewReviewsDialog"
 
 interface BusRoute {
   id: string
@@ -37,6 +40,7 @@ interface BusRoute {
   reviewCount: number
   seatsAvailable: number
   totalSeats: number
+  reviewsLoaded?: boolean
 }
 
 function SearchPageContent() {
@@ -169,13 +173,17 @@ function SearchPageContent() {
             price: route.price,
             busType: route.description || "Xe khách",
             amenities: ["Wifi", "Điều hòa"],
-            rating: 4.0,
-            reviewCount: 0,
+            rating: 0, // Will be updated by fetchReviewStatistics
+            reviewCount: 0, // Will be updated by fetchReviewStatistics
             seatsAvailable: route.availableSeats,
-            totalSeats: route.totalSeats
+            totalSeats: route.totalSeats,
+            reviewsLoaded: false
           }))
 
           setBusRoutes(transformedResults)
+          
+          // Fetch review statistics for each route
+          fetchReviewStatistics(transformedResults)
         } catch (err) {
           setError('Có lỗi xảy ra khi tìm kiếm. Vui lòng thử lại.')
           console.error('Search error:', err)
@@ -192,6 +200,35 @@ function SearchPageContent() {
     const temp = fromLocation
     setFromLocation(toLocation)
     setToLocation(temp)
+  }
+
+  // Function to fetch review statistics for routes
+  const fetchReviewStatistics = async (routes: BusRoute[]) => {
+    const updatedRoutes = await Promise.all(
+      routes.map(async (route) => {
+        try {
+          const reviewResponse = await getRouteReviews(route.id)
+          if (reviewResponse?.success && reviewResponse.data?.statistics) {
+            return {
+              ...route,
+              rating: reviewResponse.data.statistics.averageRating || 0,
+              reviewCount: reviewResponse.data.statistics.totalReviews || 0,
+              reviewsLoaded: true
+            }
+          }
+        } catch (error) {
+          console.error(`Error fetching reviews for route ${route.id}:`, error)
+          // Don't throw error, just continue with default values
+        }
+        return {
+          ...route,
+          rating: 0,
+          reviewCount: 0,
+          reviewsLoaded: true
+        }
+      })
+    )
+    setBusRoutes(updatedRoutes)
   }
 
   const handleSearch = async () => {
@@ -222,10 +259,11 @@ function SearchPageContent() {
         price: route.price,
         busType: route.description || "Xe khách",
         amenities: ["Wifi", "Điều hòa"], // Default amenities, get from API if available
-        rating: 4.0, // Default rating, get from API if available
-        reviewCount: 0, // Default review count, get from API if available
+        rating: 0, // Will be updated by fetchReviewStatistics
+        reviewCount: 0, // Will be updated by fetchReviewStatistics
         seatsAvailable: route.availableSeats,
-        totalSeats: route.totalSeats
+        totalSeats: route.totalSeats,
+        reviewsLoaded: false
       }))
 
       setBusRoutes(transformedResults)
@@ -237,6 +275,9 @@ function SearchPageContent() {
       if (departureTime) params.set('time', departureTime)
       
       router.push(`/search?${params.toString()}`)
+      
+      // Fetch review statistics for each route
+      fetchReviewStatistics(transformedResults)
       
     } catch (err) {
       setError('Có lỗi xảy ra khi tìm kiếm. Vui lòng thử lại.')
@@ -474,8 +515,14 @@ function SearchPageContent() {
                         <h3 className="font-semibold text-lg text-gray-900">{route.operator}</h3>
                         <div className="flex items-center space-x-1">
                           <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                          <span className="text-sm font-medium">{route.rating}</span>
-                          <span className="text-xs text-gray-500">({route.reviewCount} đánh giá)</span>
+                          <span className="text-sm font-medium">
+                            {!route.reviewsLoaded ? "..." : 
+                             route.reviewCount > 0 ? route.rating.toFixed(1) : "Chưa có"}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {!route.reviewsLoaded ? "đang tải..." :
+                             route.reviewCount > 0 ? `(${route.reviewCount} đánh giá)` : "(đánh giá)"}
+                          </span>
                         </div>
                         <p className="text-sm text-gray-600">{route.busType}</p>
                       </div>
@@ -530,15 +577,29 @@ function SearchPageContent() {
                             )}
                           </div>
                         </div>
-                        <Button className="bg-blue-600 hover:bg-blue-700 text-white mt-4"
-                          onClick={() => {
-                            console.log('Clicking button for route ID:', route.id)
-                            router.push(`/ticket/${route.id}`)
-                          }}
-                        >
-                          <CheckCircle className="w-4 h-4 mr-2" />
-                          Chọn chuyến
-                        </Button>
+                        <div className="space-y-2 mt-4">
+                          <ViewReviewsDialog 
+                            routeId={route.id} 
+                            routeName={`${route.operator} - ${route.departureTime}`}
+                          >
+                            <Button 
+                              variant="outline" 
+                              className="w-full border-blue-600 text-blue-600 hover:bg-blue-50"
+                            >
+                              <MessageCircle className="w-4 h-4 mr-2" />
+                              Xem đánh giá
+                            </Button>
+                          </ViewReviewsDialog>
+                          <Button className="bg-blue-600 hover:bg-blue-700 text-white w-full"
+                            onClick={() => {
+                              console.log('Clicking button for route ID:', route.id)
+                              router.push(`/ticket/${route.id}`)
+                            }}
+                          >
+                            <CheckCircle className="w-4 h-4 mr-2" />
+                            Chọn chuyến
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </div>

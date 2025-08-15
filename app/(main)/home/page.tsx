@@ -26,6 +26,8 @@ import {
 } from "lucide-react"
 
 import { useRouter } from "next/navigation"
+import ConnectionStatus from "@/components/ConnectionStatus"
+import { TestToastButton } from "@/components/TestToastButton"
 
 interface PopularRoute {
   from: string;
@@ -144,6 +146,14 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* WebSocket Connection Status */}
+      <ConnectionStatus />
+
+      {/* Test Toast Button - Only for development */}
+      <div className="fixed bottom-4 left-4 z-50">
+        <TestToastButton />
+      </div>
+
       {/* Header */}
       <NavigationBar currentPage="home" />
 

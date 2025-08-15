@@ -6,11 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Car, Mail, Phone, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 import { login } from "@/api/auth";
 export default function LoginPage() {
   const router = useRouter();
+  const { login: authLogin } = useAuth();
   const [loginMethod, setLoginMethod] = useState<"email" | "phone">("email");
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     phone: "",
@@ -24,26 +27,41 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle login logic here
-    console.log("Login data:", formData);
+    setIsLoading(true);
+    
     try {
-      if (loginMethod === "email") {
-        const { email } = formData;
-        const response = await login(email, formData.password);
-        console.log("Login response:", response);
-        if(response.message === "Login successful") {
-          router.push("/dashboard");
-        }
+      const loginCredential = loginMethod === "email" ? formData.email : formData.phone;
+      const response = await login(loginCredential, formData.password);
+      
+      console.log("Login response:", response);
+      
+      if (response.message === "Login successful") {
+        // Cập nhật AuthContext với thông tin user và token
+        const userData = {
+          id: response.user?.id || response.userId || loginCredential, // Ensure we have a user ID
+          name: response.user?.name || response.userName || "",
+          email: loginMethod === "email" ? formData.email : response.user?.email || "",
+          phone: loginMethod === "phone" ? formData.phone : response.user?.phone || "",
+          role: response.user?.role || "user"
+        };
+        
+        const token = response.token || response.accessToken || "";
+        
+        // Gọi authLogin để cập nhật context - WebSocket sẽ tự động connect
+        authLogin(userData, token);
+        
+        console.log("🔌 User logged in - WebSocket should auto-connect for user:", userData.id);
+        
+        // Redirect after successful login
+        router.push("/home");
       } else {
-        const { phone } = formData;
-        const response = await login(phone, formData.password);
-        if(response.message === "Login successful") {
-          router.push("/dashboard");
-        }
+        alert("Đăng nhập không thành công. Vui lòng kiểm tra lại thông tin.");
       }
     } catch (error) {
       console.error("Login error:", error);
       alert("Đăng nhập không thành công. Vui lòng kiểm tra lại thông tin.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -177,8 +195,12 @@ export default function LoginPage() {
             </div>
 
             {/* Login Button */}
-            <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700">
-              Đăng nhập
+            <Button 
+              type="submit" 
+              className="w-full bg-blue-600 hover:bg-blue-700"
+              disabled={isLoading}
+            >
+              {isLoading ? "Đang đăng nhập..." : "Đăng nhập"}
             </Button>
           </form>
 

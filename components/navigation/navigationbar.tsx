@@ -1,13 +1,13 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Phone, User, LogOut } from "lucide-react"
+import { Phone, User, LogOut, Bell } from "lucide-react"
 import { useRouter } from "next/navigation"
 import LoginDialog from "@/components/Dialog/LoginDialog"
 import { useAuth } from "@/context/AuthContext"
 
 interface NavigationBarProps {
-  currentPage?: "home" | "order" | "partner" | "dashboard"
+  currentPage?: "home" | "order" | "partner" | "dashboard" | "notification"
 }
 
 export default function NavigationBar({ currentPage = "home" }: NavigationBarProps) {
@@ -86,6 +86,22 @@ export default function NavigationBar({ currentPage = "home" }: NavigationBarPro
               <Phone className="w-4 h-4" />
               <span>Hotline 24/7</span>
             </div>
+            
+            {/* Notification Button - Only show when logged in */}
+            {isLoggedIn && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`relative transition-colors ${
+                  currentPage === "notification" 
+                    ? "text-blue-600 bg-blue-50" 
+                    : "text-gray-700 hover:text-blue-600 hover:bg-blue-50"
+                }`}
+                onClick={() => router.push("/notification")}
+              >
+                <Bell className="w-5 h-5" />
+              </Button>
+            )}
             
             {isLoggedIn ? (
               <div className="flex items-center space-x-2">

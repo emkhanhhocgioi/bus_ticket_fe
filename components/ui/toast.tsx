@@ -46,7 +46,7 @@ export function Toast({ type, title, message, isVisible, onClose }: ToastProps) 
   const Icon = icons[type]
 
   return (
-    <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top-2">
+    <div className="animate-in slide-in-from-top-2">
       <div
         className={cn(
           "max-w-sm w-full border rounded-lg p-4 shadow-lg",
