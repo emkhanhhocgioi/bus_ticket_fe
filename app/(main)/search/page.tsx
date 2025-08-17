@@ -41,6 +41,7 @@ interface BusRoute {
   seatsAvailable: number
   totalSeats: number
   reviewsLoaded?: boolean
+  images?: string[] // Thêm dòng này
 }
 
 function SearchPageContent() {
@@ -173,11 +174,12 @@ function SearchPageContent() {
             price: route.price,
             busType: route.description || "Xe khách",
             amenities: ["Wifi", "Điều hòa"],
-            rating: 0, // Will be updated by fetchReviewStatistics
-            reviewCount: 0, // Will be updated by fetchReviewStatistics
+            rating: 0,
+            reviewCount: 0,
             seatsAvailable: route.availableSeats,
             totalSeats: route.totalSeats,
-            reviewsLoaded: false
+            reviewsLoaded: false,
+            images: route.images || [], // Thêm dòng này
           }))
 
           setBusRoutes(transformedResults)
@@ -510,6 +512,20 @@ function SearchPageContent() {
                 {busRoutes.map((route) => (
                   <div key={route.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                      {/* Display Image */}
+                      <div className="flex items-center justify-center">
+                        {route.images && route.images.length > 0 ? (
+                          <img
+                            src={route.images[0]}
+                            alt="Bus"
+                            className="w-32 h-20 object-cover rounded-lg border"
+                          />
+                        ) : (
+                          <div className="w-32 h-20 bg-gray-200 flex items-center justify-center rounded-lg text-gray-400 text-xs">
+                            Không có ảnh
+                          </div>
+                        )}
+                      </div>
                       {/* Operator & Rating */}
                       <div className="space-y-2">
                         <h3 className="font-semibold text-lg text-gray-900">{route.operator}</h3>

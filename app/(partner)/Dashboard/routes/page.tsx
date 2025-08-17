@@ -21,7 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Edit, Trash2, MapPin, Clock, DollarSign, Users } from "lucide-react";
+import { Plus, Edit, Trash2, MapPin, Clock, DollarSign, Users, Image } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Toast, useToast } from "@/components/ui/toast";
 import {createRoute, getRoutes, updateRoute, deleteRoute} from "@/api/routes";
@@ -43,6 +43,7 @@ interface Route {
   busType: string;
   licensePlate: string;
   description: string;
+  images?: string[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -62,7 +63,8 @@ const mockRoutes: Route[] = [
     availableSeats: 30,
     busType: "Ghế ngồi",
     licensePlate: "29A-12345",
-    description: "Tuyến xe khách chất lượng cao, có wifi và điều hòa"
+    description: "Tuyến xe khách chất lượng cao, có wifi và điều hòa",
+    images: []
   },
   {
     _id: "2",
@@ -77,7 +79,8 @@ const mockRoutes: Route[] = [
     availableSeats: 25,
     busType: "Giường nằm",
     licensePlate: "50A-67890",
-    description: "Xe giường nằm cao cấp, phục vụ suất ăn nhẹ"
+    description: "Xe giường nằm cao cấp, phục vụ suất ăn nhẹ",
+    images: []
   },
   {
     _id: "3",
@@ -92,7 +95,8 @@ const mockRoutes: Route[] = [
     availableSeats: 0,
     busType: "Ghế ngồi",
     licensePlate: "30B-11111",
-    description: "Tuyến đường về miền Trung, ghế ngồi thoải mái"
+    description: "Tuyến đường về miền Trung, ghế ngồi thoải mái",
+    images: []
   },
   {
     _id: "4",
@@ -107,7 +111,8 @@ const mockRoutes: Route[] = [
     availableSeats: 18,
     busType: "Limousine",
     licensePlate: "51C-22222",
-    description: "Tuyến lên Đà Lạt, phong cảnh đẹp"
+    description: "Tuyến lên Đà Lạt, phong cảnh đẹp",
+    images: []
   },
   {
     _id: "5",
@@ -122,7 +127,8 @@ const mockRoutes: Route[] = [
     availableSeats: 28,
     busType: "Ghế ngồi",
     licensePlate: "43D-33333",
-    description: "Tuyến duyên hải miền Trung"
+    description: "Tuyến duyên hải miền Trung",
+    images: []
   }
 ];
 
@@ -148,6 +154,9 @@ export default function RouteManagement() {
     licensePlate: "",
     description: "",
   });
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     fetchRoutes();
@@ -161,6 +170,13 @@ export default function RouteManagement() {
       }));
     }
   }, [user]);
+
+  // Cleanup object URLs on unmount
+  useEffect(() => {
+    return () => {
+      imagePreviewUrls.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, [imagePreviewUrls]);
 
   const fetchRoutes = async () => {
     try {
@@ -203,6 +219,59 @@ export default function RouteManagement() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    const fileArray = Array.from(files);
+    const validFiles = fileArray.filter(file => {
+      const isValidType = file.type.startsWith('image/');
+      const isValidSize = file.size <= 5 * 1024 * 1024; // 5MB limit
+      
+      if (!isValidType) {
+        showToast("error", "Lỗi", `File ${file.name} không phải là hình ảnh`);
+        return false;
+      }
+      if (!isValidSize) {
+        showToast("error", "Lỗi", `File ${file.name} quá lớn (tối đa 5MB)`);
+        return false;
+      }
+      return true;
+    });
+
+    if (validFiles.length > 0) {
+      setUploading(true);
+      try {
+        // Create preview URLs for the new files
+        const newPreviewUrls = validFiles.map(file => URL.createObjectURL(file));
+        
+        // Update uploaded files and preview URLs
+        setUploadedFiles(prev => [...prev, ...validFiles]);
+        setImagePreviewUrls(prev => [...prev, ...newPreviewUrls]);
+
+        showToast("success", "Thành công", `Đã chọn ${validFiles.length} hình ảnh`);
+      } catch (error) {
+        console.error("Error processing files:", error);
+        showToast("error", "Lỗi", "Có lỗi xảy ra khi xử lý hình ảnh");
+      } finally {
+        setUploading(false);
+      }
+    }
+
+    // Reset input
+    e.target.value = '';
+  };
+
+  const handleRemoveImage = (index: number) => {
+    // Revoke the object URL to free memory
+    if (imagePreviewUrls[index]) {
+      URL.revokeObjectURL(imagePreviewUrls[index]);
+    }
+    
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+    setImagePreviewUrls(prev => prev.filter((_, i) => i !== index));
+  };
+
   const resetForm = () => {
     setFormData({
       routeCode: "",
@@ -218,6 +287,11 @@ export default function RouteManagement() {
       licensePlate: "",
       description: "",
     });
+    
+    // Clean up object URLs
+    imagePreviewUrls.forEach(url => URL.revokeObjectURL(url));
+    setUploadedFiles([]);
+    setImagePreviewUrls([]);
     setEditingRoute(null);
   };
 
@@ -280,7 +354,7 @@ export default function RouteManagement() {
       let response;
       if (editingRoute) {
         // Update existing route
-        response = await updateRoute(editingRoute._id!, routeData, token);
+        response = await updateRoute(editingRoute._id!, routeData, token, uploadedFiles);
         console.log("Update API Response:", response);
         
         if (response) {
@@ -289,7 +363,7 @@ export default function RouteManagement() {
         }
       } else {
         // Create new route
-        response = await createRoute(routeData, token);
+        response = await createRoute(routeData, token, uploadedFiles);
         console.log("Create API Response:", response);
         
         if (response) {
@@ -331,6 +405,12 @@ export default function RouteManagement() {
       licensePlate: route.licensePlate,
       description: route.description,
     });
+    
+    // Clear uploaded files and preview URLs when editing
+    // Note: In a real app, you might want to fetch and display existing images
+    imagePreviewUrls.forEach(url => URL.revokeObjectURL(url));
+    setUploadedFiles([]);
+    setImagePreviewUrls([]);
     setIsDialogOpen(true);
   };
 
@@ -572,6 +652,70 @@ export default function RouteManagement() {
                 />
               </div>
 
+              <div>
+                <Label htmlFor="images">Hình ảnh tuyến đường</Label>
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <Input
+                      id="fileInput"
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      onChange={handleFileUpload}
+                      className="flex-1"
+                      disabled={uploading}
+                    />
+                    {uploading && (
+                      <div className="flex items-center text-sm text-gray-500">
+                        Đang tải lên...
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Chọn nhiều hình ảnh (tối đa 5MB mỗi file). Hỗ trợ: JPG, PNG, GIF, WebP
+                  </p>
+                  
+                  {uploadedFiles.length > 0 && (
+                    <div className="border rounded p-3 bg-gray-50">
+                      <p className="text-sm font-medium text-gray-700 mb-2">
+                        Danh sách hình ảnh ({uploadedFiles.length}):
+                      </p>
+                      <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+                        {imagePreviewUrls.map((previewUrl, index) => (
+                          <div key={index} className="relative bg-white p-2 rounded border">
+                            <div className="aspect-video bg-gray-100 rounded mb-2 overflow-hidden">
+                              <img
+                                src={previewUrl}
+                                alt={`Preview ${index + 1}`}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement;
+                                  target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xMiA4VjE2TTggMTJIMTYiIHN0cm9rZT0iIzlDQTNBRiIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPC9zdmc+';
+                                }}
+                              />
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs text-gray-600">
+                                {uploadedFiles[index]?.name || `Ảnh ${index + 1}`}
+                              </span>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleRemoveImage(index)}
+                                className="text-red-600 hover:text-red-700 h-6 w-6 p-0"
+                              >
+                                ×
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div className="flex justify-end space-x-2 pt-4">
                 <Button 
                   type="button" 
@@ -664,6 +808,7 @@ export default function RouteManagement() {
                   <TableHead>Ghế</TableHead>
                   <TableHead>Loại xe</TableHead>
                   <TableHead>Biển số xe</TableHead>
+                  <TableHead>Hình ảnh</TableHead>
                   <TableHead>Trạng thái</TableHead>
                   <TableHead className="text-right">Thao tác</TableHead>
                 </TableRow>
@@ -703,6 +848,17 @@ export default function RouteManagement() {
                     </TableCell>
                     <TableCell>{route.busType}</TableCell>
                     <TableCell>{route.licensePlate}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center">
+                        <Image className="w-4 h-4 text-gray-400 mr-1" />
+                        <span className="text-sm">
+                          {route.images && route.images.length > 0 
+                            ? `${route.images.length} ảnh` 
+                            : 'Chưa có ảnh'
+                          }
+                        </span>
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                         route.availableSeats > 0 

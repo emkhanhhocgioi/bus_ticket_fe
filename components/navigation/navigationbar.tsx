@@ -7,7 +7,7 @@ import LoginDialog from "@/components/Dialog/LoginDialog"
 import { useAuth } from "@/context/AuthContext"
 
 interface NavigationBarProps {
-  currentPage?: "home" | "order" | "partner" | "dashboard" | "notification"
+  currentPage?: "home" | "order" | "partner" | "dashboard" | "notification" | "message"
 }
 
 export default function NavigationBar({ currentPage = "home" }: NavigationBarProps) {
@@ -54,6 +54,20 @@ export default function NavigationBar({ currentPage = "home" }: NavigationBarPro
               >
                 Đơn hàng của tôi
               </button>
+              {/* Hiển thị nút Tin nhắn chỉ khi user đã đăng nhập */}
+              {isLoggedIn && (
+                <button
+                  className={`transition-colors ${
+                    currentPage === "message" 
+                      ? "text-blue-600 font-medium" 
+                      : "text-gray-700 hover:text-blue-600"
+                  }`}
+                  onClick={() => router.push("/message")}
+                  type="button"
+                >
+                  Tin nhắn
+                </button>
+              )}
               <button
                 className={`transition-colors ${
                   currentPage === "partner" 

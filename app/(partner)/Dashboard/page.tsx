@@ -408,6 +408,12 @@ export default function PartnerDashboard() {
           >
             Xem tất cả đơn hàng
           </Button>
+          <Button 
+            variant="outline"
+            onClick={() => router.push("/Dashboard/support")}
+          >
+            Hỗ trợ khách hàng
+          </Button>
           <Button variant="outline">
             Xem báo cáo chi tiết
           </Button>

@@ -13,9 +13,7 @@ import {
   handleVnpayReturn
 } from "@/api/order"
 import { useAuth } from "@/context/AuthContext"
-import { useWebSocket } from "@/context/WebSocketContext"
 import ReviewDialog from "@/components/Dialog/ReviewDialog"
-import { sendSupportReply, sendSupportMessage, createSupportMessage } from "@/utils/websocketHelpers"
 
 import { 
   Search, 
@@ -76,7 +74,6 @@ export default function OrderPage() {
   const [guestLoading, setGuestLoading] = useState(false)
   
   const { user, token, isLoggedIn } = useAuth()
-  const { setSupportMessageHandler } = useWebSocket()
 
   // Payment states
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -89,16 +86,7 @@ export default function OrderPage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<BookingData | null>(null)
   
-  // Support message modal states
-  const [showSupportModal, setShowSupportModal] = useState(false)
-  const [selectedBookingForSupport, setSelectedBookingForSupport] = useState<BookingData | null>(null)
-  const [supportMessage, setSupportMessage] = useState("")
-  const [isSendingSupport, setIsSendingSupport] = useState(false)
-  const [isCreatingTicket, setIsCreatingTicket] = useState(false)
-  const [ticketCreated, setTicketCreated] = useState(false)
-  const [supportMessageHistory, setSupportMessageHistory] = useState("")
-  const [ticketStatus, setTicketStatus] = useState<'open' | 'closed'>('open') // Trạng thái ticket
-  const [isClosingTicket, setIsClosingTicket] = useState(false) // Loading state khi đóng ticket
+  // Support message functionality moved to /message page
 
   // Helper function to get routeId as string
   const getRouteIdString = (routeId: string | { _id: string }): string => {
@@ -125,7 +113,7 @@ export default function OrderPage() {
     }
   }
 
-  // Function to handle contacting bus company
+  // Function to handle contacting bus company - now redirects to message page
   const handleContactBusCompany = async (booking: BookingData) => {
     if (!user?.id || !booking.businessId || booking.businessId === "unknown") {
       console.warn("Cannot contact bus company - missing user ID or business ID", {
@@ -137,100 +125,27 @@ export default function OrderPage() {
       return;
     }
 
-    try {
-      // Tạo ticket trước khi mở modal
-      setIsCreatingTicket(true);
-      const ticketContent = `Vừa tạo 1 ticket cho ${booking.passengerName} - Đơn hàng: ${booking.id}`;
-      
-      createSupportMessage(booking.businessId, ticketContent, user.id);
-      
-      console.log("Support ticket created:", {
-        fromId: user.id,
-        toId: booking.businessId,
-        content: ticketContent
-      });
-      
-      // Đánh dấu ticket đã được tạo và mở modal
-      setTicketCreated(true);
-      setTicketStatus('open'); // Set ticket status là open
-      setSelectedBookingForSupport(booking);
-      setShowSupportModal(true);
-      setSupportMessage("");
-      setSupportMessageHistory(""); // Reset lịch sử tin nhắn khi mở modal mới
-      
-    } catch (error) {
-      console.error("Error creating support ticket:", error);
-      alert("Có lỗi xảy ra khi tạo ticket hỗ trợ. Vui lòng thử lại.");
-    } finally {
-      setIsCreatingTicket(false);
-    }
+    // Redirect to message page with pre-filled information
+    const messageContent = `Vừa tạo 1 ticket cho ${booking.passengerName} - Đơn hàng: ${booking.id}`;
+    
+    // Store the pre-fill data in sessionStorage to be picked up by message page
+    sessionStorage.setItem('messagePreFill', JSON.stringify({
+      toId: booking.businessId,
+      content: messageContent,
+      bookingInfo: {
+        id: booking.id,
+        passengerName: booking.passengerName,
+        route: booking.route,
+        company: booking.company
+      }
+    }));
+    
+    // Navigate to message page
+    window.location.href = '/message';
   }
 
-  // Function to send support message from modal
-  const handleSendSupportMessage = async () => {
-    if (!selectedBookingForSupport || !user?.id || !supportMessage.trim() || ticketStatus === 'closed') {
-      return;
-    }
-
-    try {
-      setIsSendingSupport(true);
-      // Tạo content theo format: passengerName : + tin nhắn từ modal
-      const content = `${selectedBookingForSupport.passengerName}: ${supportMessage.trim()}`;
-      
-      sendSupportMessage(selectedBookingForSupport.businessId!, content, user.id);
-      
-      console.log("Support message sent to business:", {
-        fromId: user.id,
-        toId: selectedBookingForSupport.businessId,
-        content: content
-      });
-      
-      // Chỉ clear message input, không đóng modal
-      setSupportMessage("");
-      
-      // Hiển thị tin nhắn vừa gửi ngay lập tức trong history
-      setSupportMessageHistory(prev => prev ? `${prev}\n[Bạn]: ${supportMessage.trim()}` : `[Bạn]: ${supportMessage.trim()}`);
-      
-    } catch (error) {
-      console.error("Error sending support message:", error);
-      alert("Có lỗi xảy ra khi gửi tin nhắn. Vui lòng thử lại.");
-    } finally {
-      setIsSendingSupport(false);
-    }
-  }
-
-  // Function to close ticket
-  const handleCloseTicket = async () => {
-    if (!selectedBookingForSupport || !user?.id) {
-      return;
-    }
-
-    try {
-      setIsClosingTicket(true);
-      
-      // Gửi tin nhắn đóng ticket
-      const closeMessage = `${selectedBookingForSupport.passengerName}: [TICKET CLOSED BY USER]`;
-      sendSupportMessage(selectedBookingForSupport.businessId!, closeMessage, user.id);
-      
-      console.log("Ticket closed by user:", {
-        fromId: user.id,
-        toId: selectedBookingForSupport.businessId,
-        content: closeMessage
-      });
-      
-      // Cập nhật trạng thái ticket
-      setTicketStatus('closed');
-      
-      // Thêm thông báo đóng ticket vào history
-      setSupportMessageHistory(prev => prev ? `${prev}\n[Hệ thống]: Ticket đã được đóng bởi khách hàng` : `[Hệ thống]: Ticket đã được đóng bởi khách hàng`);
-      
-    } catch (error) {
-      console.error("Error closing ticket:", error);
-      alert("Có lỗi xảy ra khi đóng ticket. Vui lòng thử lại.");
-    } finally {
-      setIsClosingTicket(false);
-    }
-  }
+  // Support message functions moved to /message page
+  // Use handleContactBusCompany to redirect to message page
 
   // Fetch orders from API
   const fetchOrders = async () => {
@@ -419,52 +334,7 @@ export default function OrderPage() {
     }
   }, [user?.id, token, isLoggedIn])
 
-  // Thiết lập handler cho support messages
-  useEffect(() => {
-    const handleSupportMessage = (data: any) => {
-      console.log('📨 Received support message:', data);
-      
-      // Kiểm tra xem có phải tin nhắn đóng ticket từ business không
-      if (data.message && data.message.includes('[TICKET CLOSED BY BUSINESS]')) {
-        setTicketStatus('closed');
-        setSupportMessageHistory(prev => prev ? `${prev}\n[Hệ thống]: Ticket đã được đóng bởi nhà xe` : `[Hệ thống]: Ticket đã được đóng bởi nhà xe`);
-        return;
-      }
-      
-      // Nếu có updatedContent từ server, hiển thị trong modal
-      if (data.updatedContent && Array.isArray(data.updatedContent)) {
-        const historyText = data.updatedContent.map((msg: string) => {
-          // Format tin nhắn để hiển thị rõ ràng người gửi
-          if (msg.includes('[TICKET CLOSED')) {
-            return `[Hệ thống]: ${msg}`;
-          } else if (msg.includes(':')) {
-            const [sender, ...content] = msg.split(':');
-            if (sender.trim() === user?.name || msg.includes(`${user?.name}:`)) {
-              return `[Bạn]: ${content.join(':').trim()}`;
-            } else {
-              return `[Nhà xe]: ${content.join(':').trim()}`;
-            }
-          }
-          return msg;
-        }).join('\n');
-        setSupportMessageHistory(historyText);
-      } else if (data.message) {
-        // Nếu chỉ có message đơn lẻ
-        let formattedMessage = data.message;
-        if (data.message.includes(':')) {
-          const [sender, ...content] = data.message.split(':');
-          if (sender.trim() === user?.name || data.message.includes(`${user?.name}:`)) {
-            formattedMessage = `[Bạn]: ${content.join(':').trim()}`;
-          } else {
-            formattedMessage = `[Nhà xe]: ${content.join(':').trim()}`;
-          }
-        }
-        setSupportMessageHistory(prev => prev ? `${prev}\n${formattedMessage}` : formattedMessage);
-      }
-    };
-
-    setSupportMessageHandler(handleSupportMessage);
-  }, [setSupportMessageHandler, user?.name]);
+  // Support message handlers moved to /message page
 
   // Handle VNPay return
   useEffect(() => {
@@ -945,19 +815,10 @@ export default function OrderPage() {
                             size="sm"
                             className="text-blue-600 border-blue-200 hover:bg-blue-50"
                             onClick={() => handleContactBusCompany(booking)}
-                            disabled={!booking.businessId || booking.businessId === "unknown" || isCreatingTicket}
+                            disabled={!booking.businessId || booking.businessId === "unknown"}
                           >
-                            {isCreatingTicket ? (
-                              <>
-                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                                Đang tạo ticket...
-                              </>
-                            ) : (
-                              <>
-                                <Phone className="w-4 h-4 mr-1" />
-                                Liên hệ nhà xe
-                              </>
-                            )}
+                            <Phone className="w-4 h-4 mr-1" />
+                            Liên hệ nhà xe
                           </Button>
                           
                           {booking.status === 'finished' && (
@@ -1132,19 +993,10 @@ export default function OrderPage() {
                         size="sm"
                         className="text-blue-600 border-blue-200 hover:bg-blue-50"
                         onClick={() => handleContactBusCompany(booking)}
-                        disabled={!booking.businessId || booking.businessId === "unknown" || isCreatingTicket}
+                        disabled={!booking.businessId || booking.businessId === "unknown"}
                       >
-                        {isCreatingTicket ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                            Đang tạo ticket...
-                          </>
-                        ) : (
-                          <>
-                            <Phone className="w-4 h-4 mr-1" />
-                            Liên hệ nhà xe
-                          </>
-                        )}
+                        <Phone className="w-4 h-4 mr-1" />
+                        Liên hệ nhà xe
                       </Button>
                       {booking.status === 'finished' && (
                         <ReviewDialog 

@@ -5,11 +5,65 @@ import { CheckCircle, XCircle, Home, FileText, Clock, CreditCard } from 'lucide-
 import { Button } from '@/components/ui/button'
 import NavigationBar from '@/components/navigation/navigationbar'
 import { useEffect, useState, Suspense } from 'react'
+import { getOrderByID, isPrepaidOrder, Order } from '@/api/order'
+import { useWebSocket,useWebSocketHelpers } from '@/context/WebSocketContext'
+import { useAuth } from '@/context/AuthContext'
+
+// Extended interface to match API response
+interface ExtendedOrder {
+  _id: string;
+  routeId: {
+    _id: string;
+    routeCode: string;
+    from: string;
+    to: string;
+    departureTime: string;
+    duration: string;
+    price: number;
+    busType: string;
+  } | string;
+  userId: string;
+  bussinessId: string;
+  fullName: string;
+  phone: string;
+  email: string;
+  dateOfBirth?: string;
+  gender?: string;
+  paymentMethod: string;
+  paymentStatus?: string;
+  transactionNo?: string | null;
+  bankCode?: string | null;
+  paymentDate?: string | null;
+  paymentAttemptAt?: string;
+  paymentFailureReason?: string | null;
+  qrPaymentAttemptAt?: string | null;
+  qrExpiryTime?: string | null;
+  qrString?: string | null;
+  vnpayTransactionNo?: string | null;
+  vnpayResponseCode?: string | null;
+  vnpayBankCode?: string | null;
+  vnpayPayDate?: string | null;
+  paidAt?: string | null;
+  paymentFailedAt?: string | null;
+  basePrice: number;
+  fees?: number;
+  total?: number;
+  orderStatus?: string;
+  finishedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 function PaymentReturnContent() {
+
+  const {sendBookingNotification} = useWebSocketHelpers()
+  const { user, token } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [paymentInfo, setPaymentInfo] = useState<any>(null)
+  const [orderData, setOrderData] = useState<ExtendedOrder | null>(null)
+  const [isLoadingOrder, setIsLoadingOrder] = useState(false)
+  const [prepaidUpdateStatus, setPrepaidUpdateStatus] = useState<string | null>(null)
 
   useEffect(() => {
     // Lấy thông tin từ URL parameters
@@ -41,8 +95,64 @@ function PaymentReturnContent() {
         txnRef: vnpTxnRef,
         secureHash: vnpSecureHash
       })
+
+      // Nếu có order ID (txnRef), lấy thông tin order
+      if (vnpTxnRef) {
+        const processOrder = async () => {
+          const orderInfo = await fetchOrderData(vnpTxnRef)
+          console.log('Order data is:', orderInfo)
+          // Nếu thanh toán thành công, cập nhật trạng thái prepaid và gửi notification
+          if (vnpResponseCode === '00' && vnpTransactionStatus === '00') {
+            updatePrepaidStatus(vnpTxnRef, orderInfo)
+          }
+        }
+        
+        processOrder()
+      }
     }
   }, [searchParams])
+
+  const fetchOrderData = async (orderId: string) => {
+    setIsLoadingOrder(true)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await getOrderByID(orderId, token || undefined)
+      setOrderData(response)
+      console.log('Order data:', response)
+      return response
+    } catch (error) {
+      console.error('Failed to fetch order data:', error)
+      return null
+    } finally {
+      setIsLoadingOrder(false)
+    }
+  }
+
+  const updatePrepaidStatus = async (orderId: string, orderInfo?: ExtendedOrder) => {
+    try {
+      const token = localStorage.getItem('token')
+      if (token) {
+        console.log('Updating prepaid status for order:', orderInfo)
+        await isPrepaidOrder(orderId, token)
+        setPrepaidUpdateStatus('success')
+        console.log('Order marked as prepaid successfully')
+        
+        // Gửi notification khi thanh toán thành công
+        if (orderInfo && user) {
+          const notificationdata = {
+            userId: user.id, // partnerId nhận notification
+            fromId: orderInfo.bussinessId, // user gửi notification
+            content: `Khách hàng vừa thanh toán cho hóa đơn ${orderInfo._id}`,
+          }
+          console.log("Sending payment success notification:", notificationdata)
+          sendBookingNotification(notificationdata)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to update prepaid status:', error)
+      setPrepaidUpdateStatus('error')
+    }
+  }
 
   // Format payment date
   const formatPayDate = (payDate: string) => {
@@ -211,6 +321,160 @@ function PaymentReturnContent() {
                     </p>
                   </div>
 
+                  {/* Order Data Details */}
+                  {isLoadingOrder ? (
+                    <div className="mt-6 pt-6 border-t border-gray-200">
+                      <h4 className="font-medium text-gray-900 mb-2">Chi tiết đơn hàng:</h4>
+                      <div className="bg-gray-50 p-4 rounded-lg">
+                        <div className="animate-pulse">
+                          <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                          <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
+                          <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : orderData ? (
+                    <div className="mt-6 pt-6 border-t border-gray-200">
+                      <h4 className="font-medium text-gray-900 mb-2">Chi tiết đơn hàng:</h4>
+                      <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <span className="text-sm text-gray-600">Họ tên:</span>
+                            <p className="font-medium text-gray-900">{orderData.fullName}</p>
+                          </div>
+                          <div>
+                            <span className="text-sm text-gray-600">Số điện thoại:</span>
+                            <p className="font-medium text-gray-900">{orderData.phone}</p>
+                          </div>
+                          <div>
+                            <span className="text-sm text-gray-600">Email:</span>
+                            <p className="font-medium text-gray-900">{orderData.email}</p>
+                          </div>
+                          <div>
+                            <span className="text-sm text-gray-600">Giới tính:</span>
+                            <p className="font-medium text-gray-900">{orderData.gender === 'male' ? 'Nam' : 'Nữ'}</p>
+                          </div>
+                          <div>
+                            <span className="text-sm text-gray-600">Phương thức thanh toán:</span>
+                            <p className="font-medium text-gray-900">{orderData.paymentMethod === 'cash' ? 'Tiền mặt' : 'VNPay'}</p>
+                          </div>
+                          <div>
+                            <span className="text-sm text-gray-600">Trạng thái thanh toán:</span>
+                            <p className="font-medium text-blue-600">{orderData.paymentStatus}</p>
+                          </div>
+                          <div>
+                            <span className="text-sm text-gray-600">Giá cơ bản:</span>
+                            <p className="font-medium text-green-600">{formatCurrency(orderData.basePrice)}</p>
+                          </div>
+                          <div>
+                            <span className="text-sm text-gray-600">Phí:</span>
+                            <p className="font-medium text-gray-900">{formatCurrency(orderData.fees || 0)}</p>
+                          </div>
+                          <div>
+                            <span className="text-sm text-gray-600">Tổng tiền:</span>
+                            <p className="font-medium text-red-600 text-lg">{formatCurrency(orderData.total || orderData.basePrice)}</p>
+                          </div>
+                          <div>
+                            <span className="text-sm text-gray-600">Trạng thái đơn hàng:</span>
+                            <p className="font-medium text-blue-600">{orderData.orderStatus}</p>
+                          </div>
+                        </div>
+                        
+                        {/* Route Information */}
+                        {orderData.routeId && typeof orderData.routeId === 'object' && (
+                          <div className="pt-4 border-t border-gray-200">
+                            <h5 className="font-medium text-gray-900 mb-2">Thông tin tuyến đường:</h5>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <span className="text-sm text-gray-600">Mã tuyến:</span>
+                                <p className="font-medium text-gray-900">{orderData.routeId.routeCode}</p>
+                              </div>
+                              <div>
+                                <span className="text-sm text-gray-600">Từ - Đến:</span>
+                                <p className="font-medium text-gray-900">{orderData.routeId.from} → {orderData.routeId.to}</p>
+                              </div>
+                              <div>
+                                <span className="text-sm text-gray-600">Giờ khởi hành:</span>
+                                <p className="font-medium text-gray-900">{orderData.routeId.departureTime}</p>
+                              </div>
+                              <div>
+                                <span className="text-sm text-gray-600">Thời gian:</span>
+                                <p className="font-medium text-gray-900">{orderData.routeId.duration}</p>
+                              </div>
+                              <div>
+                                <span className="text-sm text-gray-600">Loại xe:</span>
+                                <p className="font-medium text-gray-900">{orderData.routeId.busType}</p>
+                              </div>
+                              <div>
+                                <span className="text-sm text-gray-600">Giá vé:</span>
+                                <p className="font-medium text-green-600">{formatCurrency(orderData.routeId.price)}</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Payment Information */}
+                        <div className="pt-4 border-t border-gray-200">
+                          <h5 className="font-medium text-gray-900 mb-2">Thông tin thanh toán:</h5>
+                          <div className="grid grid-cols-2 gap-4">
+                            {orderData.paidAt && (
+                              <div>
+                                <span className="text-sm text-gray-600">Đã thanh toán lúc:</span>
+                                <p className="font-medium text-green-600">
+                                  {new Date(orderData.paidAt).toLocaleString('vi-VN')}
+                                </p>
+                              </div>
+                            )}
+                            {orderData.vnpayTransactionNo && (
+                              <div>
+                                <span className="text-sm text-gray-600">Mã GD VNPay:</span>
+                                <p className="font-medium text-gray-900">{orderData.vnpayTransactionNo}</p>
+                              </div>
+                            )}
+                            {orderData.vnpayBankCode && (
+                              <div>
+                                <span className="text-sm text-gray-600">Ngân hàng VNPay:</span>
+                                <p className="font-medium text-gray-900">{getBankName(orderData.vnpayBankCode)}</p>
+                              </div>
+                            )}
+                            {orderData.transactionNo && (
+                              <div>
+                                <span className="text-sm text-gray-600">Mã giao dịch:</span>
+                                <p className="font-medium text-gray-900">{orderData.transactionNo}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {orderData.createdAt && (
+                          <div className="pt-2 border-t border-gray-200">
+                            <span className="text-sm text-gray-600">Ngày tạo:</span>
+                            <p className="font-medium text-gray-900">
+                              {new Date(orderData.createdAt).toLocaleString('vi-VN')}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {/* Prepaid Status Update */}
+                  {isPaymentSuccess && prepaidUpdateStatus && (
+                    <div className="mt-6 pt-6 border-t border-gray-200">
+                      <h4 className="font-medium text-gray-900 mb-2">Cập nhật trạng thái:</h4>
+                      <div className={`p-3 rounded-lg ${
+                        prepaidUpdateStatus === 'success' 
+                          ? 'bg-green-50 text-green-800 border border-green-200' 
+                          : 'bg-red-50 text-red-800 border border-red-200'
+                      }`}>
+                        {prepaidUpdateStatus === 'success' 
+                          ? '✓ Đơn hàng đã được đánh dấu là đã thanh toán trước'
+                          : '✗ Không thể cập nhật trạng thái thanh toán'
+                        }
+                      </div>
+                    </div>
+                  )}
+
                   {/* Security Hash */}
                   <div className="mt-4">
                     <h4 className="font-medium text-gray-900 mb-2">Mã bảo mật:</h4>
@@ -242,6 +506,18 @@ function PaymentReturnContent() {
                       : 'Mã lỗi: ' + paymentInfo.responseCode
                     }
                   </p>
+                  
+                  {/* Debug Order Data */}
+                  {orderData && (
+                    <div className="mt-4 text-left">
+                      <details className="text-xs text-gray-600">
+                        <summary className="cursor-pointer font-medium">Debug: Order Data</summary>
+                        <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-auto">
+                          {JSON.stringify(orderData, null, 2)}
+                        </pre>
+                      </details>
+                    </div>
+                  )}
                 </div>
               </div>
 

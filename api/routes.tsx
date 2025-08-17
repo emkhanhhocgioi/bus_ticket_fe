@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = process.env.API_URL || "http://localhost:3001/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || "https://api-gateway-cgv4.onrender.com/api";
 
 export interface Route {
   _id?: string;
@@ -16,16 +16,34 @@ export interface Route {
   busType: string;
   licensePlate: string;
   description?: string;
+  images?: string[];
   createdAt?: string;
   updatedAt?: string;
 }
 
-export const createRoute = async (routeData: Omit<Route, '_id' | 'createdAt' | 'updatedAt' | 'availableSeats'>, token: string) => {
+export const createRoute = async (routeData: Omit<Route, '_id' | 'createdAt' | 'updatedAt' | 'availableSeats'>, token: string, imageFiles?: File[]) => {
   try {
-    const response = await axios.post(`${API_URL}/trip/create`, routeData, {
+    // Create FormData for multipart/form-data
+    const formData = new FormData();
+    
+    // Add all route data fields
+    Object.entries(routeData).forEach(([key, value]) => {
+      if (key !== 'images' && value !== undefined && value !== null) {
+        formData.append(key, value.toString());
+      }
+    });
+
+    // Add image files if provided
+    if (imageFiles && imageFiles.length > 0) {
+      imageFiles.forEach((file) => {
+        formData.append('images', file);
+      });
+    }
+
+    const response = await axios.post(`${API_URL}/trip/create`, formData, {
       headers: {
-        "Content-Type": "application/json",
         "Authorization": `Bearer ${token}`,
+        // Don't set Content-Type, let axios set it with boundary for multipart/form-data
       },
     });
     return response.data;
@@ -54,12 +72,29 @@ export const getRoutes = async (partnerId?: string, token?: string) => {
   }
 };
 
-export const updateRoute = async (routeId: string, routeData: Partial<Route>, token: string) => {
+export const updateRoute = async (routeId: string, routeData: Partial<Route>, token: string, imageFiles?: File[]) => {
   try {
-    const response = await axios.put(`${API_URL}/trip/update/${routeId}`, routeData, {
+    // Create FormData for multipart/form-data
+    const formData = new FormData();
+    
+    // Add all route data fields
+    Object.entries(routeData).forEach(([key, value]) => {
+      if (key !== 'images' && value !== undefined && value !== null) {
+        formData.append(key, value.toString());
+      }
+    });
+
+    // Add image files if provided
+    if (imageFiles && imageFiles.length > 0) {
+      imageFiles.forEach((file) => {
+        formData.append('images', file);
+      });
+    }
+
+    const response = await axios.put(`${API_URL}/trip/update/${routeId}`, formData, {
       headers: {
-        "Content-Type": "application/json",
         "Authorization": `Bearer ${token}`,
+        // Don't set Content-Type, let axios set it with boundary for multipart/form-data
       },
     });
     return response.data;
@@ -104,6 +139,7 @@ export const searchRoutes = async (
         headers,
       }
     );
+    console.log("Search routes response:", response.data);
     return response.data;
   } catch (error) {
     console.error("Failed to search routes:", error);

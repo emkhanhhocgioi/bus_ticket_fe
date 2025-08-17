@@ -3,7 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { WebSocketProvider } from "@/context/WebSocketContext";
-import WebSocketStatus from "@/components/WebSocketStatus";
+
 import { WebSocketToast } from "@/components/WebSocketToast";
 
 
@@ -35,7 +35,7 @@ export default function RootLayout({
         <AuthProvider>
           <WebSocketProvider>
             {children}
-            <WebSocketStatus />
+        
             <WebSocketToast />
           </WebSocketProvider>
         </AuthProvider>

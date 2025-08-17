@@ -1,7 +1,7 @@
 import axios from "axios";
 
 
-const API_URL = process.env.API_URL || "http://localhost:3001/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || "https://api-gateway-cgv4.onrender.com/api";
 
 export const login = async (loginparam: string, password: string) => {
     try {

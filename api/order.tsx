@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = process.env.API_URL || "http://localhost:3001/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || "https://api-gateway-cgv4.onrender.com/api";
 
 export interface Order {
   _id?: string;
@@ -28,10 +28,30 @@ export const createOrder = async (orderData: Omit<Order, '_id' | 'createdAt' | '
     }
 
     const response = await axios.post(`${API_URL}/order/create`, orderData, { headers });
+    
     return response.data;
   } catch (error: any) {
     console.error("Failed to create order:", error);
     throw new Error("Failed to create order");
+  }
+};
+
+export const getOrderByID = async (orderId: string, token?: string) => {
+  try {
+    const headers: any = {
+      "Content-Type": "application/json",
+    };
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const response = await axios.get(`${API_URL}/order/${orderId}`, { headers });
+    console.log("Fetched order by ID:", response.data.data);
+    return response.data.data;
+  } catch (error: any) {
+    console.error("Failed to fetch order by ID:", error);
+    throw new Error("Failed to fetch order by ID");
   }
 };
 
@@ -115,6 +135,22 @@ export const rejectOrder = async (orderId: string, token: string) => {
   } catch (error: any) {
     console.error("Failed to reject order:", error);
     throw new Error("Failed to reject order");
+  }
+};
+
+export const isPrepaidOrder = async (orderId: string, token?: string) => {
+
+  try {
+    const response = await axios.put(`${API_URL}/order/set-prepaid/${orderId}`, {}, {
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
+    });
+    return response.data;
+  } catch (error: any) {
+    console.error("Failed to reject order:", error);
+    throw new Error("Failed to set order as prepaids");
   }
 };
 

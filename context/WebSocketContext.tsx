@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useRef, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { 
   connectWebSocket, 
@@ -28,6 +28,8 @@ interface WebSocketContextType {
   clearMessages: () => void;
   connect: () => void;
   disconnect: () => void;
+  onSupportMessage?: (data: any) => void;
+  setSupportMessageHandler: (handler: (data: any) => void) => void;
 }
 
 const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined);
@@ -37,6 +39,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
   const [connectionState, setConnectionState] = useState('DISCONNECTED');
   const [messages, setMessages] = useState<WebSocketMessage[]>([]);
+  const supportMessageHandlerRef = useRef<((data: any) => void) | null>(null);
 
   // Tính số tin nhắn chưa đọc
   const unreadCount = messages.filter(msg => !msg.read).length;
@@ -102,6 +105,11 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
 
   // Xử lý tin nhắn nhận được
   const handleIncomingMessage = (data: any) => {
+    // Bỏ qua message type 'welcome'
+    if (data.type === 'welcome') {
+      return;
+    }
+
     const newMessage: WebSocketMessage = {
       id: data.id || `msg_${Date.now()}_${Math.random()}`,
       type: data.type || 'unknown',
@@ -149,6 +157,26 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         }
         break;
       
+      case 'support_message':
+        console.log('🆘 Tin nhắn hỗ trợ:', data);
+        
+        // Gọi callback handler nếu có
+        if (supportMessageHandlerRef.current) {
+          supportMessageHandlerRef.current(data);
+        }
+        
+        if ('Notification' in window && Notification.permission === 'granted') {
+          const isReply = data.data?.isReply || data.isReply;
+          const content = data.data?.content || data.content || data.message;
+          const fromId = data.data?.fromId || data.fromId || data.from;
+          
+          new Notification(isReply ? 'Phản hồi hỗ trợ' : 'Yêu cầu hỗ trợ mới', {
+            body: content ? `${fromId}: ${content.substring(0, 100)}` : 'Tin nhắn hỗ trợ mới',
+            icon: '/favicon.ico'
+          });
+        }
+        break;
+      
       default:
         console.log('📨 Tin nhắn mới:', data);
     }
@@ -191,6 +219,11 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval);
   }, []);
 
+  // Function để thiết lập support message handler
+  const setSupportMessageHandler = useCallback((handler: (data: any) => void) => {
+    supportMessageHandlerRef.current = handler;
+  }, []);
+
   const value: WebSocketContextType = {
     isConnected,
     connectionState,
@@ -200,7 +233,8 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     markMessageAsRead,
     clearMessages,
     connect,
-    disconnect
+    disconnect,
+    setSupportMessageHandler
   };
 
   return (
@@ -221,6 +255,7 @@ export function useWebSocket() {
 // Hook để sử dụng các helper functions
 export function useWebSocketHelpers() {
   const { sendMessage } = useWebSocket();
+  const { user } = useAuth();
 
   const sendBookingNotification = (bookingData: any) => {
     sendMessage({
@@ -246,9 +281,22 @@ export function useWebSocketHelpers() {
     });
   };
 
+  const sendSupportMessage = (toId: string, content: string, isReply: boolean = false) => {
+    sendMessage({
+      type: 'support_message',
+      data: {
+        fromId: user?.id,
+        toId,
+        content,
+        isReply
+      }
+    });
+  };
+
   return {
     sendBookingNotification,
     sendOrderUpdate,
-    sendChatMessage
+    sendChatMessage,
+    sendSupportMessage
   };
 }

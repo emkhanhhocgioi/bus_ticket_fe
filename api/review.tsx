@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_URL = process.env.API_URL || "http://localhost:3001/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || "https://api-gateway-cgv4.onrender.com/api";
 
 export const createReview = async (
     reviewData: { routeId: string; userId: string; rating: number; comment?: string; images?: File[] },
@@ -41,7 +41,7 @@ export const getRouteReviews = async (routeId: string, token?: string) => {
                 Authorization: `Bearer ${token}`,
             },
         });
-        console.log("Fetched route reviews:", response.data);
+
         return response.data;
 
     } catch (error) {

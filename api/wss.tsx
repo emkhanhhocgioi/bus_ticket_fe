@@ -30,7 +30,7 @@ class WebSocketManager {
     this.onMessageCallback = onMessage || null;
 
     try {
-      const wsUrl = process.env.NEXT_PUBLIC_WSS_URL || process.env.WSS_URL || 'ws://localhost:3002';
+      const wsUrl = process.env.NEXT_PUBLIC_WSS_URL || process.env.WSS_URL || 'wss://trip-service-z00x.onrender.com';
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {
