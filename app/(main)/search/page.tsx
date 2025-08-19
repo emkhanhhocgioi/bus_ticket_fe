@@ -167,7 +167,7 @@ function SearchPageContent() {
           
           const transformedResults: BusRoute[] = results.map((route: any) => ({
             id: route._id,
-            operator: route.partnerId,
+            operator: route.partnerId?.company || route.partnerId || "Nhà xe không xác định",
             departureTime: route.departureTime,
             arrivalTime: route.arrivalTime || "N/A",
             duration: route.duration,
@@ -254,7 +254,7 @@ function SearchPageContent() {
       // Transform API response to match BusRoute interface
       const transformedResults: BusRoute[] = results.map((route: any) => ({
         id: route._id,
-        operator: route.routeCode, // You may need to map this to actual partner name
+        operator: route.partnerId?.company || route.partnerId || "Nhà xe không xác định",
         departureTime: route.departureTime,
         arrivalTime: route.arrivalTime || "N/A", // Calculate or get from API
         duration: route.duration,
