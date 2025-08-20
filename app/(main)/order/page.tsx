@@ -13,9 +13,8 @@ import {
   handleVnpayReturn
 } from "@/api/order"
 import { useAuth } from "@/context/AuthContext"
-import { useWebSocket } from "@/context/WebSocketContext"
 import ReviewDialog from "@/components/Dialog/ReviewDialog"
-import { sendSupportReply, sendSupportMessage, createSupportMessage } from "@/utils/websocketHelpers"
+import { createSupportMessage } from "@/utils/websocketHelpers"
 
 import { 
   Search, 
@@ -76,7 +75,6 @@ export default function OrderPage() {
   const [guestLoading, setGuestLoading] = useState(false)
   
   const { user, token, isLoggedIn } = useAuth()
-  const { setSupportMessageHandler } = useWebSocket()
 
   // Payment states
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -89,16 +87,13 @@ export default function OrderPage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<BookingData | null>(null)
   
-  // Support message modal states
+  // Support ticket modal states (chỉ giữ lại tạo ticket)
   const [showSupportModal, setShowSupportModal] = useState(false)
   const [selectedBookingForSupport, setSelectedBookingForSupport] = useState<BookingData | null>(null)
-  const [supportMessage, setSupportMessage] = useState("")
-  const [isSendingSupport, setIsSendingSupport] = useState(false)
   const [isCreatingTicket, setIsCreatingTicket] = useState(false)
   const [ticketCreated, setTicketCreated] = useState(false)
-  const [supportMessageHistory, setSupportMessageHistory] = useState("")
-  const [ticketStatus, setTicketStatus] = useState<'open' | 'closed'>('open') // Trạng thái ticket
-  const [isClosingTicket, setIsClosingTicket] = useState(false) // Loading state khi đóng ticket
+  const [ticketStatus, setTicketStatus] = useState<'open' | 'closed'>('open')
+  const [isClosingTicket, setIsClosingTicket] = useState(false)
 
   // Helper function to get routeId as string
   const getRouteIdString = (routeId: string | { _id: string }): string => {
@@ -142,7 +137,7 @@ export default function OrderPage() {
       setIsCreatingTicket(true);
       const ticketContent = `Vừa tạo 1 ticket cho ${booking.passengerName} - Đơn hàng: ${booking.id}`;
       
-      createSupportMessage(booking.businessId, ticketContent, user.id);
+      await createSupportMessage(booking.businessId, ticketContent, user.id);
       
       console.log("Support ticket created:", {
         fromId: user.id,
@@ -152,50 +147,15 @@ export default function OrderPage() {
       
       // Đánh dấu ticket đã được tạo và mở modal
       setTicketCreated(true);
-      setTicketStatus('open'); // Set ticket status là open
+      setTicketStatus('open');
       setSelectedBookingForSupport(booking);
       setShowSupportModal(true);
-      setSupportMessage("");
-      setSupportMessageHistory(""); // Reset lịch sử tin nhắn khi mở modal mới
       
     } catch (error) {
       console.error("Error creating support ticket:", error);
       alert("Có lỗi xảy ra khi tạo ticket hỗ trợ. Vui lòng thử lại.");
     } finally {
       setIsCreatingTicket(false);
-    }
-  }
-
-  // Function to send support message from modal
-  const handleSendSupportMessage = async () => {
-    if (!selectedBookingForSupport || !user?.id || !supportMessage.trim() || ticketStatus === 'closed') {
-      return;
-    }
-
-    try {
-      setIsSendingSupport(true);
-      // Tạo content theo format: passengerName : + tin nhắn từ modal
-      const content = `${selectedBookingForSupport.passengerName}: ${supportMessage.trim()}`;
-      
-      sendSupportMessage(selectedBookingForSupport.businessId!, content, user.id);
-      
-      console.log("Support message sent to business:", {
-        fromId: user.id,
-        toId: selectedBookingForSupport.businessId,
-        content: content
-      });
-      
-      // Chỉ clear message input, không đóng modal
-      setSupportMessage("");
-      
-      // Hiển thị tin nhắn vừa gửi ngay lập tức trong history
-      setSupportMessageHistory(prev => prev ? `${prev}\n[Bạn]: ${supportMessage.trim()}` : `[Bạn]: ${supportMessage.trim()}`);
-      
-    } catch (error) {
-      console.error("Error sending support message:", error);
-      alert("Có lỗi xảy ra khi gửi tin nhắn. Vui lòng thử lại.");
-    } finally {
-      setIsSendingSupport(false);
     }
   }
 
@@ -208,9 +168,13 @@ export default function OrderPage() {
     try {
       setIsClosingTicket(true);
       
-      // Gửi tin nhắn đóng ticket
+      // Ghi nhận việc đóng ticket
       const closeMessage = `${selectedBookingForSupport.passengerName}: [TICKET CLOSED BY USER]`;
-      sendSupportMessage(selectedBookingForSupport.businessId!, closeMessage, user.id);
+      try {
+        await createSupportMessage(selectedBookingForSupport.businessId!, closeMessage, user.id);
+      } catch (e) {
+        console.warn("Could not record ticket close:", e);
+      }
       
       console.log("Ticket closed by user:", {
         fromId: user.id,
@@ -220,9 +184,6 @@ export default function OrderPage() {
       
       // Cập nhật trạng thái ticket
       setTicketStatus('closed');
-      
-      // Thêm thông báo đóng ticket vào history
-      setSupportMessageHistory(prev => prev ? `${prev}\n[Hệ thống]: Ticket đã được đóng bởi khách hàng` : `[Hệ thống]: Ticket đã được đóng bởi khách hàng`);
       
     } catch (error) {
       console.error("Error closing ticket:", error);
@@ -419,52 +380,7 @@ export default function OrderPage() {
     }
   }, [user?.id, token, isLoggedIn])
 
-  // Thiết lập handler cho support messages
-  useEffect(() => {
-    const handleSupportMessage = (data: any) => {
-      console.log('📨 Received support message:', data);
-      
-      // Kiểm tra xem có phải tin nhắn đóng ticket từ business không
-      if (data.message && data.message.includes('[TICKET CLOSED BY BUSINESS]')) {
-        setTicketStatus('closed');
-        setSupportMessageHistory(prev => prev ? `${prev}\n[Hệ thống]: Ticket đã được đóng bởi nhà xe` : `[Hệ thống]: Ticket đã được đóng bởi nhà xe`);
-        return;
-      }
-      
-      // Nếu có updatedContent từ server, hiển thị trong modal
-      if (data.updatedContent && Array.isArray(data.updatedContent)) {
-        const historyText = data.updatedContent.map((msg: string) => {
-          // Format tin nhắn để hiển thị rõ ràng người gửi
-          if (msg.includes('[TICKET CLOSED')) {
-            return `[Hệ thống]: ${msg}`;
-          } else if (msg.includes(':')) {
-            const [sender, ...content] = msg.split(':');
-            if (sender.trim() === user?.name || msg.includes(`${user?.name}:`)) {
-              return `[Bạn]: ${content.join(':').trim()}`;
-            } else {
-              return `[Nhà xe]: ${content.join(':').trim()}`;
-            }
-          }
-          return msg;
-        }).join('\n');
-        setSupportMessageHistory(historyText);
-      } else if (data.message) {
-        // Nếu chỉ có message đơn lẻ
-        let formattedMessage = data.message;
-        if (data.message.includes(':')) {
-          const [sender, ...content] = data.message.split(':');
-          if (sender.trim() === user?.name || data.message.includes(`${user?.name}:`)) {
-            formattedMessage = `[Bạn]: ${content.join(':').trim()}`;
-          } else {
-            formattedMessage = `[Nhà xe]: ${content.join(':').trim()}`;
-          }
-        }
-        setSupportMessageHistory(prev => prev ? `${prev}\n${formattedMessage}` : formattedMessage);
-      }
-    };
-
-    setSupportMessageHandler(handleSupportMessage);
-  }, [setSupportMessageHandler, user?.name]);
+  // Removed websocket support message handler since messaging UI removed
 
   // Handle VNPay return
   useEffect(() => {
@@ -1390,10 +1306,8 @@ export default function OrderPage() {
                   onClick={() => {
                     setShowSupportModal(false);
                     setSelectedBookingForSupport(null);
-                    setSupportMessage("");
                     setTicketCreated(false);
                     setTicketStatus('open');
-                    setSupportMessageHistory("");
                   }}
                   className="text-white hover:text-gray-200"
                 >
@@ -1450,136 +1364,46 @@ export default function OrderPage() {
                 </div>
               </div>
 
-              {/* Lịch sử tin nhắn hỗ trợ */}
+              {/* Simple ticket info (messaging removed) */}
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Cuộc trò chuyện
-                </label>
-                <div className="border rounded-lg bg-gray-50 p-4 h-40 overflow-y-auto">
-                  {supportMessageHistory ? (
-                    <div className="space-y-2">
-                      {supportMessageHistory.split('\n').map((message, index) => {
-                        const isUserMessage = message.startsWith('[Bạn]:');
-                        const isSystemMessage = message.startsWith('[Hệ thống]:');
-                        const isBusinessMessage = message.startsWith('[Nhà xe]:');
-                        
-                        return (
-                          <div key={index} className={`flex ${isUserMessage ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`max-w-[80%] p-2 rounded-lg text-sm ${
-                              isUserMessage 
-                                ? 'bg-blue-500 text-white'
-                                : isSystemMessage
-                                ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
-                                : isBusinessMessage
-                                ? 'bg-green-100 text-green-800 border border-green-200'
-                                : 'bg-gray-200 text-gray-800'
-                            }`}>
-                              {message.replace(/^\[.*?\]:\s*/, '')}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-gray-500 text-center italic">Chưa có tin nhắn nào...</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Message Input - chỉ hiển thị khi ticket còn mở */}
-              {ticketStatus === 'open' && (
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Tin nhắn mới
-                  </label>
-                  <Textarea
-                    value={supportMessage}
-                    onChange={(e) => setSupportMessage(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        if (supportMessage.trim() && !isSendingSupport) {
-                          handleSendSupportMessage();
-                        }
-                      }
-                    }}
-                    placeholder="Nhập tin nhắn của bạn..."
-                    className="w-full resize-none"
-                    rows={3}
-                    disabled={isSendingSupport}
-                  />
-                  <p className="text-xs text-gray-500 mt-2">
-                    Nhấn Enter để gửi nhanh, Shift+Enter để xuống dòng
+                <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                  <h4 className="font-medium text-gray-900 mb-2">Trạng thái ticket</h4>
+                  <p className="text-sm text-gray-600">
+                    {ticketStatus === 'open' 
+                      ? 'Ticket đã được tạo. Nhà xe sẽ liên hệ với bạn qua hệ thống hỗ trợ.' 
+                      : 'Ticket đã đóng.'}
                   </p>
                 </div>
-              )}
 
-              {/* Actions */}
-              <div className="flex space-x-3">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => {
-                    setShowSupportModal(false);
-                    setSelectedBookingForSupport(null);
-                    setSupportMessage("");
-                    setTicketCreated(false);
-                    setTicketStatus('open');
-                    setSupportMessageHistory("");
-                  }}
-                  disabled={isSendingSupport || isClosingTicket}
-                >
-                  Đóng cửa sổ
-                </Button>
-                
-                {ticketStatus === 'open' ? (
-                  <>
-                    <Button
-                      className="flex-1 bg-blue-600 hover:bg-blue-700"
-                      onClick={handleSendSupportMessage}
-                      disabled={!supportMessage.trim() || isSendingSupport}
-                    >
-                      {isSendingSupport ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Đang gửi...
-                        </>
-                      ) : (
-                        <>
-                          <Phone className="w-4 h-4 mr-2" />
-                          Gửi tin nhắn
-                        </>
-                      )}
-                    </Button>
-                    
-                    <Button
-                      variant="outline"
-                      className="flex-1 text-red-600 border-red-200 hover:bg-red-50"
-                      onClick={handleCloseTicket}
-                      disabled={isClosingTicket || isSendingSupport}
-                    >
-                      {isClosingTicket ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Đang đóng...
-                        </>
-                      ) : (
-                        <>
-                          <X className="w-4 h-4 mr-2" />
-                          Đóng ticket
-                        </>
-                      )}
-                    </Button>
-                  </>
-                ) : (
+                <div className="flex space-x-3">
                   <Button
                     variant="outline"
-                    className="flex-1 text-gray-600 border-gray-200"
-                    disabled
+                    className="flex-1"
+                    onClick={() => {
+                      setShowSupportModal(false);
+                      setSelectedBookingForSupport(null);
+                      setTicketCreated(false);
+                      setTicketStatus('open');
+                    }}
+                    disabled={isCreatingTicket || isClosingTicket}
                   >
-                    Ticket đã đóng
+                    Đóng cửa sổ
                   </Button>
-                )}
+
+                  {ticketStatus === 'open' ? (
+                    <Button
+                      className="flex-1 bg-red-600 hover:bg-red-700"
+                      onClick={handleCloseTicket}
+                      disabled={isClosingTicket}
+                    >
+                      {isClosingTicket ? 'Đang đóng...' : 'Đóng ticket'}
+                    </Button>
+                  ) : (
+                    <Button variant="outline" className="flex-1" disabled>
+                      Ticket đã đóng
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           </div>

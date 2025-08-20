@@ -7,7 +7,7 @@ import LoginDialog from "@/components/Dialog/LoginDialog"
 import { useAuth } from "@/context/AuthContext"
 
 interface NavigationBarProps {
-  currentPage?: "home" | "order" | "partner" | "dashboard" | "notification" | "message"
+  currentPage?: "home" | "order" | "partner" | "dashboard" | "notification" | "message" | "chatbot"
 }
 
 export default function NavigationBar({ currentPage = "home" }: NavigationBarProps) {
@@ -68,6 +68,18 @@ export default function NavigationBar({ currentPage = "home" }: NavigationBarPro
                   Tin nhắn
                 </button>
               )}
+              {/* Nút Chatbot */}
+              <button
+                className={`transition-colors ${
+                  currentPage === "chatbot" 
+                    ? "text-blue-600 font-medium" 
+                    : "text-gray-700 hover:text-blue-600"
+                }`}
+                onClick={() => router.push("/chatbot")}
+                type="button"
+              >
+                Trợ lý ảo
+              </button>
               <button
                 className={`transition-colors ${
                   currentPage === "partner" 

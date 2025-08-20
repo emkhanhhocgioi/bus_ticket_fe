@@ -114,6 +114,35 @@ export default function HomePage() {
     }
   ]
 
+  // Featured partners derived from popular route / partner data
+  const partners = [
+    {
+      _id: "688f57fb028a500e07449c36",
+      orderCount: 32,
+      totalRevenue: 6560000,
+      avgOrderValue: 205000,
+      routeCode: "QB-HN-02",
+      from: "Đà Nẵng",
+      to: "Quảng Bình",
+      departureTime: "23:00",
+      duration: "5 giờ",
+      price: 200000,
+      busType: "Xe limosin 22 chỗ",
+      licensePlate: "29A-1234",
+      rating: 0,
+      partnerId: "687fa3869ae89b39c1f6f5d3",
+      isActive: true,
+      images: [
+        "https://res.cloudinary.com/demhulggh/image/upload/v1755617398/bus_trips/1755617396381_bus.jpg"
+      ],
+      partnerInfo: {
+        company: "Nhà Xe Minh Phát",
+        phone: "0123785917",
+        email: "khanhlevinh2011.work@gmail.com"
+      }
+    }
+  ]
+
   const testimonials = [
     {
       name: "Anh Nguyễn Tuấn Quỳnh",
@@ -146,9 +175,6 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-    
-
-      
 
       {/* Header */}
       <NavigationBar currentPage="home" />
@@ -167,10 +193,8 @@ export default function HomePage() {
           <div className="flex flex-wrap gap-2 mb-8 justify-center md:justify-start">
             {[
               { id: "bus", label: "Xe khách", icon: Car },
-              { id: "flight", label: "Máy bay-20K", icon: Plane },
-              { id: "train", label: "Tàu hỏa", icon: Train },
-              { id: "rental", label: "Thuê xe", icon: Car, badge: "Mới" }
-            ].map(({ id, label, icon: Icon, badge }) => (
+             
+            ].map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 onClick={() => setActiveTab(id)}
@@ -182,11 +206,7 @@ export default function HomePage() {
               >
                 <Icon className="w-5 h-5" />
                 <span className="text-sm font-medium">{label}</span>
-                {badge && (
-                  <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
-                    {badge}
-                  </span>
-                )}
+               
               </button>
             ))}
           </div>
@@ -327,19 +347,45 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Promotions */}
+      {/* Featured Partners (Nhà xe nổi bật) */}
       <section className="py-16 bg-gray-50">
         <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center mb-12 text-gray-900">Ưu đãi nổi bật</h2>
+          <h2 className="text-3xl font-bold text-center mb-12 text-gray-900">Nhà xe nổi bật</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {promotions.map((promo, index) => (
-              <div key={index} className="bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer group">
-                <div className="h-48 bg-gradient-to-r from-blue-500 to-purple-600 relative overflow-hidden">
-                  <div className="absolute inset-0 bg-black/10 group-hover:bg-black/20 transition-colors"></div>
+            {partners.map((p, index) => (
+              <div key={p._id || index} className="bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer group">
+                <div className="h-48 relative overflow-hidden bg-gray-100">
+                  {p.images && p.images[0] ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.images[0]} alt={p.partnerInfo?.company || 'partner'} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-600"></div>
+                  )}
+                  <div className="absolute top-3 left-3 bg-white/80 text-sm px-2 py-1 rounded">{p.busType}</div>
                 </div>
                 <div className="p-6">
-                  <h3 className="font-semibold text-lg mb-2 text-gray-900 line-clamp-2">{promo.title}</h3>
-                  <p className="text-gray-600 text-sm leading-relaxed">{promo.subtitle}</p>
+                  <h3 className="font-semibold text-lg mb-1 text-gray-900">{p.partnerInfo?.company}</h3>
+                  <p className="text-sm text-gray-600 mb-3">{p.from} → {p.to} • {p.duration} • Giờ khởi hành {p.departureTime}</p>
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <div className="text-2xl font-bold text-blue-600">{p.price ? `${Number(p.price).toLocaleString('vi-VN')}đ` : 'Liên hệ'}</div>
+                      
+                    </div>
+                    <div className="text-right text-sm">
+                      <div className="text-gray-600">Biển số</div>
+                      <div className="font-medium text-gray-800">{p.licensePlate}</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-gray-600">
+                      <div>Liên hệ: <a href={`tel:${p.partnerInfo?.phone}`} className="text-blue-600">{p.partnerInfo?.phone}</a></div>
+                      <div>Email: <a href={`mailto:${p.partnerInfo?.email}`} className="text-blue-600">{p.partnerInfo?.email}</a></div>
+                    </div>
+                    <div>
+                    
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}
