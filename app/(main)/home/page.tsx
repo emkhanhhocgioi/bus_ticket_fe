@@ -30,10 +30,28 @@ import { useRouter } from "next/navigation"
 
 
 interface PopularRoute {
+  _id?: string;
   from: string;
   to: string;
   price: string;
   originalPrice?: string;
+  partnerId?: string;
+  images?: string[];
+  partnerInfo?: {
+    _id: string;
+    company: string;
+    phone: string;
+    email: string;
+  };
+}
+
+interface FeaturedPartner {
+  _id: string;
+  company: string;
+  phone: string;
+  email: string;
+  image?: string;
+  routeCount: number;
 }
 
 export default function HomePage() {
@@ -42,6 +60,7 @@ export default function HomePage() {
   const [toLocation, setToLocation] = useState("")
   const [departureDate, setDepartureDate] = useState("")
   const [popularRoutes, setPopularRoutes] = useState<PopularRoute[]>([])
+  const [featuredPartners, setFeaturedPartners] = useState<FeaturedPartner[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -62,10 +81,14 @@ export default function HomePage() {
 
         // Transform the data to match our interface
         const transformedRoutes = routesData.map((route: any) => ({
+          _id: route._id,
           from: route.from || route.origin || route.departure || '',
           to: route.to || route.destination || route.arrival || '',
           price: route.price ? `${Number(route.price).toLocaleString('vi-VN')}đ` : route.formattedPrice || '0đ',
-          originalPrice: route.originalPrice ? `${Number(route.originalPrice).toLocaleString('vi-VN')}đ` : undefined
+          originalPrice: route.originalPrice ? `${Number(route.originalPrice).toLocaleString('vi-VN')}đ` : undefined,
+          partnerId: route.partnerId,
+          images: route.images || [],
+          partnerInfo: route.partnerInfo
         }))
 
         setPopularRoutes(transformedRoutes.length > 0 ? transformedRoutes : [
@@ -74,6 +97,33 @@ export default function HomePage() {
           { from: "Sài Gòn", to: "Phan Thiết", price: "160.000đ", originalPrice: "180.000đ" },
           { from: "Nha Trang", to: "Sài Gòn", price: "200.000đ" },
         ])
+
+        // Extract featured partners from routes with partnerInfo
+        const partners = new Map<string, FeaturedPartner>()
+        
+        routesData.forEach((route: any) => {
+          if (route.partnerInfo && route.partnerInfo._id) {
+            const partnerId = route.partnerInfo._id
+            if (partners.has(partnerId)) {
+              const existing = partners.get(partnerId)!
+              partners.set(partnerId, {
+                ...existing,
+                routeCount: existing.routeCount + 1
+              })
+            } else {
+              partners.set(partnerId, {
+                _id: route.partnerInfo._id,
+                company: route.partnerInfo.company,
+                phone: route.partnerInfo.phone,
+                email: route.partnerInfo.email,
+                image: route.images && route.images.length > 0 ? route.images[0] : undefined,
+                routeCount: 1
+              })
+            }
+          }
+        })
+
+        setFeaturedPartners(Array.from(partners.values()))
       } catch (error) {
         console.error("Failed to fetch popular routes:", error)
         // Fallback data if API fails
@@ -114,35 +164,6 @@ export default function HomePage() {
     }
   ]
 
-  // Featured partners derived from popular route / partner data
-  const partners = [
-    {
-      _id: "688f57fb028a500e07449c36",
-      orderCount: 32,
-      totalRevenue: 6560000,
-      avgOrderValue: 205000,
-      routeCode: "QB-HN-02",
-      from: "Đà Nẵng",
-      to: "Quảng Bình",
-      departureTime: "23:00",
-      duration: "5 giờ",
-      price: 200000,
-      busType: "Xe limosin 22 chỗ",
-      licensePlate: "29A-1234",
-      rating: 0,
-      partnerId: "687fa3869ae89b39c1f6f5d3",
-      isActive: true,
-      images: [
-        "https://res.cloudinary.com/demhulggh/image/upload/v1755617398/bus_trips/1755617396381_bus.jpg"
-      ],
-      partnerInfo: {
-        company: "Nhà Xe Minh Phát",
-        phone: "0123785917",
-        email: "khanhlevinh2011.work@gmail.com"
-      }
-    }
-  ]
-
   const testimonials = [
     {
       name: "Anh Nguyễn Tuấn Quỳnh",
@@ -171,6 +192,10 @@ export default function HomePage() {
     if (departureDate) params.set('time', departureDate)
     
     router.push(`/search?${params.toString()}`)
+  }
+
+  const handleCompanyClick = (partnerId: string) => {
+    router.push(`/company_detail/${partnerId}`)
   }
 
   return (
@@ -351,45 +376,64 @@ export default function HomePage() {
       <section className="py-16 bg-gray-50">
         <div className="container mx-auto px-4">
           <h2 className="text-3xl font-bold text-center mb-12 text-gray-900">Nhà xe nổi bật</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {partners.map((p, index) => (
-              <div key={p._id || index} className="bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer group">
-                <div className="h-48 relative overflow-hidden bg-gray-100">
-                  {p.images && p.images[0] ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.images[0]} alt={p.partnerInfo?.company || 'partner'} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-600"></div>
-                  )}
-                  <div className="absolute top-3 left-3 bg-white/80 text-sm px-2 py-1 rounded">{p.busType}</div>
+          
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {[...Array(4)].map((_, index) => (
+                <div key={index} className="bg-white rounded-xl border border-gray-200 p-6 animate-pulse">
+                  <div className="w-full h-40 bg-gray-200 rounded-lg mb-4"></div>
+                  <div className="h-6 bg-gray-200 rounded mb-2"></div>
+                  <div className="h-4 bg-gray-200 rounded"></div>
                 </div>
-                <div className="p-6">
-                  <h3 className="font-semibold text-lg mb-1 text-gray-900">{p.partnerInfo?.company}</h3>
-                  <p className="text-sm text-gray-600 mb-3">{p.from} → {p.to} • {p.duration} • Giờ khởi hành {p.departureTime}</p>
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <div className="text-2xl font-bold text-blue-600">{p.price ? `${Number(p.price).toLocaleString('vi-VN')}đ` : 'Liên hệ'}</div>
-                      
-                    </div>
-                    <div className="text-right text-sm">
-                      <div className="text-gray-600">Biển số</div>
-                      <div className="font-medium text-gray-800">{p.licensePlate}</div>
-                    </div>
+              ))}
+            </div>
+          ) : featuredPartners.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {featuredPartners.map((partner) => (
+                <div 
+                  key={partner._id} 
+                  onClick={() => handleCompanyClick(partner._id)}
+                  className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg hover:border-blue-200 transition-all duration-300 cursor-pointer"
+                >
+                  <div className="w-full h-40 bg-gray-100 rounded-lg mb-4 overflow-hidden">
+                    {partner.image ? (
+                      <img 
+                        src={partner.image} 
+                        alt={partner.company}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.src = '/api/placeholder/300/200'
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-2xl">
+                        {partner.company.charAt(0)}
+                      </div>
+                    )}
                   </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm text-gray-600">
-                      <div>Liên hệ: <a href={`tel:${p.partnerInfo?.phone}`} className="text-blue-600">{p.partnerInfo?.phone}</a></div>
-                      <div>Email: <a href={`mailto:${p.partnerInfo?.email}`} className="text-blue-600">{p.partnerInfo?.email}</a></div>
-                    </div>
-                    <div>
-                    
-                    </div>
-                  </div>
+                  <h3 className="text-lg font-semibold mb-2 text-gray-900 line-clamp-2">
+                    {partner.company}
+                  </h3>
+                  <p className="text-sm text-gray-600 mb-2">
+                    📞 {partner.phone}
+                  </p>
+                  <p className="text-sm text-blue-600 font-medium">
+                    {partner.routeCount} tuyến đường
+                  </p>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <Car className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                Nhà xe nổi bật
+              </h3>
+              <p className="text-gray-600">
+                Khám phá các nhà xe uy tín trên khắp cả nước. Click vào tuyến đường phổ biến để xem thêm thông tin chi tiết.
+              </p>
+            </div>
+          )}
         </div>
       </section>
 

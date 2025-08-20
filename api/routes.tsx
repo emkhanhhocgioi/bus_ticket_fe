@@ -63,7 +63,7 @@ export const getRoutes = async (partnerId?: string, token?: string) => {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    const url = partnerId ? `${API_URL}/trip/${partnerId}` : `${API_URL}/trip`;
+    const url = `${API_URL}/trip/${partnerId}`
     const response = await axios.get(url, { headers });
     return response.data;
   } catch (error) {
